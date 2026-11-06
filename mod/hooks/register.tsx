@@ -1,4 +1,4 @@
-// Claude Subs in Claude Code: a band above the prompt with the live account's usage and a button
+// Claude Subs in Claude Code: a band under the prompt (or above it) with the live account's usage and a button
 // per saved account; a press switches the login, and every running session follows (the same way
 // a /login in one session reaches the others).
 //
@@ -9,7 +9,7 @@
 // /login), so the latest tokens are always saved before anything can replace them.
 
 import { atom, read, update } from 'claude-code'
-import type { EngineInterface, Register } from 'claude-code'
+import type { ElementTable, EngineInterface, Register } from 'claude-code'
 
 import type { SubsAccount, SubsStatus, SubsWindow } from '../types'
 
@@ -18,6 +18,8 @@ type Engine = EngineInterface
 const status = atom({ plugin: 'subs-switcher', key: 'status' } as const, null, { shape: 'status-1' })
 const busy = atom({ plugin: 'subs-switcher', key: 'busy' } as const, null)
 const hidden = atom({ plugin: 'subs-switcher', key: 'hidden' } as const, false)
+/** Where the band draws: under the prompt (the hint line's row, the default) or above it. */
+const placement = atom({ plugin: 'subs-switcher', key: 'placement' } as const, 'below')
 
 /** Where claude-subs and Claude Code keep their files on this machine. */
 type Where = {
@@ -164,6 +166,52 @@ async function switchTo($: Engine, a: SubsAccount) {
   }
 }
 
+/** The band: the live account's usage, then a button per other saved account; null with none. */
+async function band($: Engine, ui: ElementTable, columns: number) {
+  const st = await read($, status)
+  if (st === null || st.accounts.length === 0) {
+    return null
+  }
+  const switching = await read($, busy)
+  const { Box, Button, Text } = ui
+  const live = st.accounts.find(a => a.active)
+  const others = st.accounts.filter(a => !a.active)
+  const resets = (w: SubsWindow | null) =>
+    columns >= 90 && w?.resets ? <Text dimColor> {w.resets}</Text> : null
+
+  return (
+    <Box flexDirection="row" flexWrap="wrap" columnGap={2}>
+      {live ? (
+        <Text>
+          <Text color="success">●</Text> <Text weight="bold">{live.short}</Text>
+          {'  '}session <Text color={tone(live.session)}>{pct(live.session)}%</Text>
+          {resets(live.session)}
+          {'  '}week <Text color={tone(live.week)}>{pct(live.week)}%</Text>
+          {resets(live.week)}
+        </Text>
+      ) : (
+        <Text dimColor>No live account</Text>
+      )}
+      {others.map(a =>
+        a.status === 'needs_login' ? (
+          <Text dimColor>{a.short}: needs /login</Text>
+        ) : (
+          <Button
+            key={`switch-${a.id}`}
+            label={`Switch to ${a.short}`}
+            dimColor={switching !== null}
+            onPress={() => switchTo($, a)}
+          >
+            {a.short} <Text color={tone(a.session)}>{pct(a.session)}</Text>/
+            <Text color={tone(a.week)}>{pct(a.week)}</Text>
+          </Button>
+        ),
+      )}
+      {switching !== null && <Text dimColor>switching to {switching}…</Text>}
+    </Box>
+  )
+}
+
 const tone = (w: SubsWindow | null) =>
   w === null ? undefined : w.percent >= 85 ? 'error' : w.percent >= 60 ? 'warning' : undefined
 const pct = (w: SubsWindow | null) => (w === null ? '–' : `${Math.round(w.percent)}`)
@@ -174,10 +222,12 @@ export const register: Register = on => {
     where = await locate($)
     const isHidden = (await $.store.get('hidden')) === true
     await update($, hidden, () => isHidden)
+    const isAbove = (await $.store.get('placement')) === 'above'
+    await update($, placement, () => (isAbove ? 'above' : 'below'))
     await $.command.register({
       name: 'subs',
       description: 'Claude Subs: your accounts and their usage; /subs <account> switches to one',
-      argumentHint: '[account | refresh | hide | show]',
+      argumentHint: '[account | refresh | hide | show | above | below]',
     })
     await load($, true)
     if (e.isInteractive) {
@@ -188,53 +238,29 @@ export const register: Register = on => {
     return started
   })
 
-  on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
-    if (e.props.hasSurvey || (await read($, hidden))) {
+  // Under the prompt: the engine's hint line (`? for shortcuts`, `esc to interrupt`), then the band.
+  on('ui.render', { component: 'PromptHint' }, async ($, e, next) => {
+    if ((await read($, hidden)) || (await read($, placement)) !== 'below') {
       return next(e)
     }
-    const st = await read($, status)
-    if (st === null || st.accounts.length === 0) {
+    const row = await band($, $.ui.resolve(e), e.viewport?.columns ?? 120)
+    if (row === null) {
       return next(e)
     }
-    const switching = await read($, busy)
-    const { Box, Button, Text } = $.ui.resolve(e)
-    const live = st.accounts.find(a => a.active)
-    const others = st.accounts.filter(a => !a.active)
-    const roomy = e.props.bodyColumns >= 90
-    const resets = (w: SubsWindow | null) =>
-      roomy && w?.resets ? <Text dimColor> {w.resets}</Text> : null
-
+    const { Box } = $.ui.resolve(e)
     return (
-      <Box flexDirection="row" flexWrap="wrap" columnGap={2}>
-        {live ? (
-          <Text>
-            <Text color="success">●</Text> <Text weight="bold">{live.short}</Text>
-            {'  '}session <Text color={tone(live.session)}>{pct(live.session)}%</Text>
-            {resets(live.session)}
-            {'  '}week <Text color={tone(live.week)}>{pct(live.week)}%</Text>
-            {resets(live.week)}
-          </Text>
-        ) : (
-          <Text dimColor>No live account</Text>
-        )}
-        {others.map(a =>
-          a.status === 'needs_login' ? (
-            <Text dimColor>{a.short}: needs /login</Text>
-          ) : (
-            <Button
-              key={`switch-${a.id}`}
-              label={`Switch to ${a.short}`}
-              dimColor={switching !== null}
-              onPress={() => switchTo($, a)}
-            >
-              {a.short} <Text color={tone(a.session)}>{pct(a.session)}</Text>/
-              <Text color={tone(a.week)}>{pct(a.week)}</Text>
-            </Button>
-          ),
-        )}
-        {switching !== null && <Text dimColor>switching to {switching}…</Text>}
+      <Box flexDirection="column">
+        {await next(e)}
+        {row}
       </Box>
     )
+  })
+
+  on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
+    if (e.props.hasSurvey || (await read($, hidden)) || (await read($, placement)) !== 'above') {
+      return next(e)
+    }
+    return (await band($, $.ui.resolve(e), e.props.bodyColumns)) ?? next(e)
   })
 
   on('command.run', { command: 'subs' }, async ($, e) => {
@@ -243,6 +269,13 @@ export const register: Register = on => {
       await $.store.set('hidden', arg === 'hide')
       await update($, hidden, () => arg === 'hide')
       return { text: arg === 'hide' ? 'Claude Subs band hidden; /subs show brings it back.' : 'Claude Subs band shown.' }
+    }
+    if (arg === 'above' || arg === 'below') {
+      await $.store.set('placement', arg)
+      await update($, placement, () => arg)
+      await update($, hidden, () => false)
+      await $.store.set('hidden', false)
+      return { text: `Claude Subs band ${arg} the prompt.` }
     }
     if (arg === 'refresh') {
       const r = await subs($, ['refresh'], 120_000)
@@ -263,7 +296,7 @@ export const register: Register = on => {
       return { text: `claude-subs did not answer: ${r.err}` }
     }
     return {
-      text: `${r.out}\n\n/subs <account> switches (its name, email or number); the band above the prompt does too.`,
+      text: `${r.out}\n\n/subs <account> switches (its name, email or number), as the band's buttons do; /subs above or /subs below moves the band.`,
     }
   })
 
@@ -284,7 +317,7 @@ export const register: Register = on => {
     return {
       text:
         'Claude Subs: /logout revokes this login at Anthropic, and the copy Claude Subs saved goes with it. ' +
-        'To use another account, switch with the band above the prompt or /subs <account>. ' +
+        'To use another account, switch with the band under the prompt or /subs <account>. ' +
         'Run /logout again within 30 seconds to log out anyway.',
     }
   }).catch(($, e, next) => next(e))

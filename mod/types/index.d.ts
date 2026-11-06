@@ -49,6 +49,7 @@ declare module 'claude-code' {
       /** The short name of the account a switch is under way to. */
       busy: string | null
       hidden: boolean
+      placement: 'below' | 'above'
     }
   }
 }

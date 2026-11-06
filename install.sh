@@ -98,7 +98,7 @@ say ""
 "$data/bin/claude-subs" status || true
 say ""
 say "Next:"
-say "  * Start a new Claude Code session: the band above the prompt shows your accounts."
+say "  * Start a new Claude Code session: the band under the prompt shows your accounts."
 say "  * Run /login there once per account; each login is saved on its own."
 say "  * Switch with a button in the band, /subs <account>, or: claude-subs switch <account>"
 say "  * Never /logout: it revokes the login, the saved copy included."

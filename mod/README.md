@@ -1,14 +1,14 @@
 # subs-switcher
 
 The Claude Code half of [claude-subs](https://github.com/Duoquote/claude-subs): your Claude
-accounts in a band above the prompt.
+accounts in a band under the prompt (or above it, with `/subs above`).
 
 - **The live account:** session and weekly usage, with reset times.
-- **A button per saved account:** click it (fullscreen mode) or focus the band with `ctrl+x tab`
-  and press Enter. Claude Code switches to that account, and every running session follows from
-  its next request.
+- **A button per saved account:** click it (fullscreen mode). Claude Code switches to that
+  account, and every running session follows from its next request. Above the prompt the band
+  can also be focused with `ctrl+x tab`, then Enter presses a button.
 - **`/subs`:** lists the accounts. `/subs <account>` switches, `/subs refresh` reads usage now, and
-  `/subs hide` / `/subs show` toggle the band.
+  `/subs hide` / `/subs show` toggle the band, `/subs above` / `/subs below` move it.
 - **`/logout`** is asked twice. A logout revokes the login at Anthropic, which kills the saved copy
   too.
 

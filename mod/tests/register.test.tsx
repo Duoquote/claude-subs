@@ -1,6 +1,13 @@
 import { describe, expect, mock, test } from 'claude-code/testing'
+import type { On } from 'claude-code'
 
-const BAND = {
+const HINT = {
+  plugin: 'subs-switcher',
+  component: 'PromptHint',
+  props: { isDraft: false, isWorking: false, hint: '? for shortcuts' },
+} as const
+
+const ABOVE = {
   plugin: 'subs-switcher',
   component: 'AbovePrompt',
   props: {
@@ -61,45 +68,57 @@ const STATUS = {
   ],
 }
 
+const command = (args: string) =>
+  ({
+    command: 'subs',
+    args,
+    origin: { kind: 'composer' },
+    presentation: { isFullscreen: true, columns: 120 },
+  }) as const
+
+/** The world beneath the mod: a status file, a binary that records its runs, the engine's drawings. */
+function world(on: On, ran: string[][]) {
+  mock.clock(on)
+  mock.env(on, { HOME: '/home/u' })
+  mock.store(on, {})
+  on('session.start', (_, e) => ({ cwd: e.cwd }))
+  on('command.register', (_, e) => ({ value: { command: e.name } }))
+  // The engine hands the hook the path made absolute for the host (a drive letter on Windows).
+  on('fs.stat', (_, e) => {
+    if (e.path.replaceAll('\\', '/').endsWith('/home/u/.local/share/claude-subs/status.json')) {
+      return { value: { kind: 'file', size: 1, mtimeMs: 1, isLink: false } }
+    }
+    return { deny: `no ${e.path}` }
+  })
+  on('fs.read', () => ({ value: JSON.stringify(STATUS) }))
+  on('process.run', (_, e) => {
+    ran.push([...e.argv])
+    return {
+      value: {
+        exitCode: 0,
+        stdout: 'Switched to side@example.com.',
+        stderr: '',
+        isStdoutTruncated: false,
+        isStderrTruncated: false,
+      },
+    }
+  })
+  on('ui.toast', () => ({ value: undefined }))
+  // What the engine draws at each site when the mod passes.
+  on('ui.render', ($, e) => {
+    const { Text } = $.ui.resolve(e)
+    return <Text>{e.component === 'PromptHint' ? '? for shortcuts' : 'engine band'}</Text>
+  })
+}
+
 describe('register', () => {
-  test('the band shows the live account and switches on a press', async ($, on) => {
+  test('the band sits under the prompt, keeps the hint line, and switches on a press', async ($, on) => {
     const ran: string[][] = []
-    mock.clock(on)
-    mock.env(on, { HOME: '/home/u' })
-    mock.store(on, {})
-    on('session.start', (_, e) => ({ cwd: e.cwd }))
-    on('command.register', (_, e) => ({ value: { command: e.name } }))
-    // The engine hands the hook the path made absolute for the host (a drive letter on Windows).
-    on('fs.stat', (_, e) => {
-      if (e.path.replaceAll('\\', '/').endsWith('/home/u/.local/share/claude-subs/status.json')) {
-        return { value: { kind: 'file', size: 1, mtimeMs: 1, isLink: false } }
-      }
-      return { deny: `no ${e.path}` }
-    })
-    on('fs.read', () => ({ value: JSON.stringify(STATUS) }))
-    on('process.run', (_, e) => {
-      ran.push([...e.argv])
-      return {
-        value: {
-          exitCode: 0,
-          stdout: 'Switched to side@example.com.',
-          stderr: '',
-          isStdoutTruncated: false,
-          isStderrTruncated: false,
-        },
-      }
-    })
-    on('ui.toast', () => ({ value: undefined }))
-    // The engine's own band, drawn when the mod passes.
-    on('ui.render', ($, e) => {
-      const { Text } = $.ui.resolve(e)
-      return <Text>engine</Text>
-    })
-
+    world(on, ran)
     await $.session.start({ cwd: '/work', surface: 'terminal', isInteractive: false })
-    const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
 
-    expect(await ui.find({ type: 'Text', text: /engine/ })).toBeUndefined()
+    const ui = await $.ui.mount({ ...HINT, surface: 'terminal' })
+    expect(await ui.find({ type: 'Text', text: /for shortcuts/ })).toBeDefined()
     const live = await ui.find({ type: 'Text', text: /work/ })
     expect(live?.text).toContain('session 42%')
     expect(live?.text).toContain('week 91%')
@@ -109,6 +128,24 @@ describe('register', () => {
     await ui.press({ key: 'switch-B' })
     expect(ran[0]).toEqual(['/opt/claude-subs/bin/claude-subs', 'switch', 'B'])
     await ui.unmount()
+
+    const above = await $.ui.mount({ ...ABOVE, surface: 'terminal' })
+    expect((await above.find({ type: 'Text' }))?.text).toBe('engine band')
+    await above.unmount()
+  })
+
+  test('/subs above moves the band over the prompt', async ($, on) => {
+    world(on, [])
+    await $.session.start({ cwd: '/work', surface: 'terminal', isInteractive: false })
+    expect((await $.command.run(command('above'))).text).toContain('above the prompt')
+
+    const above = await $.ui.mount({ ...ABOVE, surface: 'terminal' })
+    expect(await above.find({ key: 'switch-B' })).toBeDefined()
+    await above.unmount()
+    const hint = await $.ui.mount({ ...HINT, surface: 'terminal' })
+    expect(await hint.find({ type: 'Text', text: /work/ })).toBeUndefined()
+    expect((await hint.find({ type: 'Text' }))?.text).toBe('? for shortcuts')
+    await hint.unmount()
   })
 
   test('/logout is asked twice', async ($, on) => {

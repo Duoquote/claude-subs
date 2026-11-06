@@ -3,7 +3,7 @@
 Switches Claude Code's login between your Claude accounts, and shows how much of each account's
 session (5-hour) and weekly limit is used.
 
-- **In Claude Code** (Windows and Linux): a band above the prompt shows the live account's usage,
+- **In Claude Code** (Windows and Linux): a band under the prompt shows the live account's usage,
   with a button for every other saved account. Click one and every running Claude Code session
   carries on with that account.
 - **On Windows:** a tray app with the usage in the icon and a popover listing all accounts.
@@ -40,8 +40,8 @@ target\release\claude-subs.exe setup --mod-dir "$PWD\mod"
 - **Add an account:** run `/login` in any Claude Code session. The new login is saved on its own;
   there is no separate add step.
 - **Switch:**
-  - click a button in the band (fullscreen mode, `"tui": "fullscreen"`), or focus the band with
-    `ctrl+x tab` and press Enter;
+  - click a button in the band (fullscreen mode, `"tui": "fullscreen"`). With the band above the
+    prompt (`/subs above`) you can also focus it with `ctrl+x tab` and press Enter;
   - type `/subs <account>`;
   - run `claude-subs switch <account>`;
   - on Windows, use the tray popover or menu.
@@ -58,11 +58,12 @@ target\release\claude-subs.exe setup --mod-dir "$PWD\mod"
 
 | | |
 |---|---|
-| Band | The live account's session and week, then `[ side 12/30 ]` (session/week %) per account. |
+| Band | Under the prompt, below the hint line: the live account's session and week, then `[ side 12/30 ]` (session/week %) per account. |
 | `/subs` | Lists the accounts. |
 | `/subs <account>` | Switches. |
 | `/subs refresh` | Reads every account's usage now. |
 | `/subs hide`, `/subs show` | Toggles the band. |
+| `/subs above`, `/subs below` | Moves the band over the prompt or back under it. |
 
 The mod is an early-access Claude Code feature (function hooks), and its API may change between
 Claude Code releases. If a release breaks it, the command line keeps working.
