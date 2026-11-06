@@ -1,0 +1,6 @@
+{
+  "identifier": "default",
+  "description": "The popover: the app's own commands (allowed by default) and the snapshot event.",
+  "windows": ["popover"],
+  "permissions": ["core:default"]
+}

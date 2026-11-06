@@ -1,0 +1,9 @@
+/target
+# Tauri writes the capability schemas here on every build.
+/app/gen
+/ui/node_modules
+/ui/dist
+
+# Claude Code lays its API types beside a mod it loads from a folder.
+/mod/.claude-plugin/types/
+/mod/tsconfig.json

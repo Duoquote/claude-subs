@@ -1,0 +1,21 @@
+@import "tailwindcss";
+@import "@fontsource-variable/ibm-plex-sans";
+@import "@fontsource-variable/dm-sans";
+
+@import "./theme.css";
+
+/* The popover has no scrollbar gutter: the list scrolls with the wheel. */
+@layer utilities {
+  .no-scrollbar {
+    scrollbar-width: none;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+html,
+body {
+  user-select: none;
+  overflow: hidden;
+}

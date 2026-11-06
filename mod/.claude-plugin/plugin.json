@@ -1,0 +1,8 @@
+{
+  "name": "subs-switcher",
+  "version": "0.2.0",
+  "description": "Your Claude accounts above the prompt: the live one's usage, and a button per saved account that switches every session to it. Needs the claude-subs binary.",
+  "author": { "name": "Duoquote", "url": "https://github.com/Duoquote/claude-subs" },
+  "homepage": "https://github.com/Duoquote/claude-subs",
+  "types": "./types/index.d.ts"
+}

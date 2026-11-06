@@ -1,0 +1,45 @@
+[package]
+name = "claude-subs"
+version = "0.2.0"
+edition = "2024"
+rust-version = "1.97"
+publish = false
+description = "Switch the Claude Code login between accounts and watch each account's usage: a tray app on Windows, a command line on Linux."
+
+[[bin]]
+name = "claude-subs"
+path = "src/main.rs"
+
+[target.'cfg(windows)'.build-dependencies]
+tauri-build = { version = "2.6.3", features = [] }
+
+[dependencies]
+anyhow = "1"
+serde = { version = "1", features = ["derive"] }
+# preserve_order: ~/.claude.json is rewritten with its keys in their original order.
+serde_json = { version = "1", features = ["preserve_order"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time", "fs"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+chrono = { version = "0.4", features = ["serde"] }
+rand = "0.8"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "chrono"] }
+tracing-appender = "0.2.5"
+
+# The tray app is Windows only; elsewhere the binary is the command line alone.
+[target.'cfg(windows)'.dependencies]
+# `custom-protocol`: the UI is always the embedded ui/dist (no dev server), debug builds included.
+tauri = { version = "2.12.5", features = ["tray-icon", "custom-protocol"] }
+tauri-plugin-single-instance = "2.5.4"
+tauri-plugin-autostart = "2.7.0"
+windows = { version = "0.62", features = [
+  "Win32_Foundation",
+  "Win32_Globalization",
+  "Win32_Security_Cryptography",
+  "Win32_System_Console",
+  "Win32_System_Registry",
+  "Win32_UI_WindowsAndMessaging",
+] }
+
+[dev-dependencies]
+tempfile = "3"
