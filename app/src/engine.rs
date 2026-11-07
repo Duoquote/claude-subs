@@ -98,7 +98,7 @@ pub struct Snapshot {
 pub struct AccountView {
     pub id: String,
     pub email: String,
-    /// The email's local part ("side"), or the whole email when two accounts share it.
+    /// The email's local part ("work"), or the whole email when two accounts share it.
     pub short: String,
     pub name: Option<String>,
     pub org: Option<String>,

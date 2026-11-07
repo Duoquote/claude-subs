@@ -14,7 +14,7 @@ export type SubsWindow = {
 export type SubsAccount = {
   id: string
   email: string
-  /** The email's local part ("side"), or the whole email when two accounts share it. */
+  /** The email's local part ("work"), or the whole email when two accounts share it. */
   short: string
   name: string | null
   org: string | null

@@ -1,36 +1,37 @@
-# Claude Subs
+<h1 align="center">Claude Subs</h1>
 
-Switches Claude Code's login between your Claude accounts, and shows how much of each account's
-session (5-hour) and weekly limit is used.
+<p align="center">
+  Switch Claude Code between your Claude accounts in one click,<br>
+  and see how much of each account's 5-hour and weekly limit is left.
+</p>
 
-- **In Claude Code** (Windows and Linux): a band under the prompt. On its left, the live account's
-  usage. On its right, the best other account to switch to, with its usage, reset times and a
-  Switch button; `‹ ›` pages through the rest. Click Switch and every running Claude Code session
-  carries on with that account.
-- **On Windows:** a tray app with the usage in the icon and a popover listing all accounts.
-- **Anywhere:** a command line, `claude-subs status` / `switch <account>`.
+<p align="center">
+  <a href="https://github.com/Duoquote/claude-subs/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/Duoquote/claude-subs?style=flat-square"></a>
+  <img alt="Linux and Windows" src="https://img.shields.io/badge/platform-linux%20%7C%20windows-informational?style=flat-square">
+</p>
 
-## Install on Linux
+<p align="center">
+  <img src="docs/band.svg" alt="The Claude Subs band under the Claude Code prompt: the live account on the left, the best account to switch to on the right, with a Switch button and a pager">
+</p>
+
+- **In Claude Code:** a band under the prompt. Your live account is on the left, and the best
+  account to switch to is on the right. Click **Switch**, and every running session carries on
+  with that account.
+- **On Windows:** a tray icon with the live account's usage, and a popover of all your accounts.
+- **Anywhere:** `claude-subs status`, `claude-subs switch <account>`.
+
+## Install
+
+**Linux** (x86_64, aarch64):
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/Duoquote/claude-subs/main/install.sh | sh
 ```
 
-What the installer does:
+Run it again to update. `... | sh -s -- --uninstall` removes it; your saved logins stay in
+`~/.local/share/claude-subs` until you delete that folder.
 
-1. Downloads the static binary for x86_64 or aarch64 from the latest release and checks its
-   SHA-256.
-2. Installs it in `~/.local/share/claude-subs/bin`, with a link in `~/.local/bin`.
-3. Installs the Claude Code mod in `~/.local/share/claude-subs/mod`.
-4. Runs `claude-subs setup`, which names the mod's folder in `CLAUDE_CODE_PLUGIN_DIRS` in
-   `~/.claude/settings.json`. A backup goes to the data folder first.
-
-Run it again to update. To remove, add `-s -- --uninstall` (`... | sh -s -- --uninstall`). The
-saved logins stay until you delete `~/.local/share/claude-subs`.
-
-## Install on Windows
-
-Build it (below), start `target\release\claude-subs.exe`, then load the mod:
+**Windows:** [build it](#build), start `target\release\claude-subs.exe`, then load the mod:
 
 ```powershell
 target\release\claude-subs.exe setup --mod-dir "$PWD\mod"
@@ -38,164 +39,133 @@ target\release\claude-subs.exe setup --mod-dir "$PWD\mod"
 
 ## Use
 
-- **Add an account:** run `/login` in any Claude Code session. The new login is saved on its own;
-  there is no separate add step.
-- **Switch:**
-  - click **Switch** in the band (fullscreen mode, `"tui": "fullscreen"`); `‹` and `›` page
-    through the accounts, best first. With the band above the prompt (`/subs above`) you can also
-    focus it with `ctrl+x tab` and press Enter;
-  - type `/subs <account>`;
-  - run `claude-subs switch <account>`;
-  - on Windows, use the tray popover or menu.
+1. **Add accounts:** run `/login` in Claude Code, once per account. Each login is saved by itself.
+2. **Switch:** click **Switch** in the band (Claude Code's fullscreen mode, `"tui": "fullscreen"`),
+   type `/subs <account>`, or run `claude-subs switch <account>`. Running sessions pick up the new
+   account with their next request.
+3. **Never `/logout`:** it revokes the login at Anthropic, and the saved copy goes with it. The mod
+   asks before letting one through.
 
-  An account is named by its email, the part before the `@`, or its number in `claude-subs status`.
-  Running sessions use the new account from their next request. This is the same mechanism that
-  makes a `/login` in one session apply to the others.
-- **Don't `/logout`.** Logout revokes the login at Anthropic, which also kills the saved copy. The
-  mod asks before letting a `/logout` through.
-- An account marked **needs /login** has a saved login that was refused: it expired after about 30
-  days unused, or was revoked. Run `/login` with that account again.
+An account marked **needs /login** has a login that expired (after about 30 days unused) or was
+revoked: run `/login` with it again.
 
-### In Claude Code
+### Reading the band
 
-| | |
+Each account reads `name session │ week`, like `work 42% 2h05 │ 93% tmrw 05:00`.
+
+| Shows | Means |
 |---|---|
-| Band | Under the prompt, below the hint line: `● work ∞ │ 79% tmrw 05:00` on the left, `side idle │ 71% tmrw 14:00 [ Switch ]  ‹ 1/5 ›` on the right (see below). |
-| `/subs` | Lists the accounts. |
-| `/subs <account>` | Switches. |
-| `/subs refresh` | Reads every account's usage now. |
-| `/subs hide`, `/subs show` | Toggles the band. |
-| `/subs above`, `/subs below` | Moves the band over the prompt or back under it. |
-
-Each account reads `name session │ week`, each window as its use and when it resets:
-
-| | |
-|---|---|
-| `65% 1h05` | 65% used, resets in 1 h 05 min (a countdown under 6 hours) |
-| `85% tmrw 05:00` | resets tomorrow at 05:00; then `Sat 11:00`, and past a week `14 Nov` |
-| `idle` | the window has not started; it starts with the account's first message |
+| `42% 2h05` | 42% used, resets in 2 h 05 min |
+| `93% tmrw 05:00` | resets tomorrow at 05:00; further out `Sat 11:00`, then `14 Nov` |
+| `idle` | not started yet: the window starts with the account's first message |
 | `∞` | the plan has no 5-hour limit |
-| `full 40m` | at the limit, free again in 40 minutes |
+| `full 40m` | at the limit, free again in 40 min |
 
-Narrow terminals drop the right account's reset times first, then the live one's, and then put the
-right account on a second row.
+Amber from 60%, red from 85%. In a narrow terminal the reset times go first.
 
-**Which account the band offers.** Weekly room that resets unused is lost, so the band offers the
-account whose week resets soonest and still has room:
+### Which account it offers
 
-- An account is offered when it has at least 10% of room left: of its week, and of its 5-hour
-  session while one is running. A session that frees up within 15 minutes does not hold it back.
-- Its score is `100 × (1 − hours until its week resets ÷ 168)`, plus up to 20 for a running
-  session with room left that resets soon: `20 × room × (1 − hours until it resets ÷ 5)`.
-- Ties go to more room, then to an account with no 5-hour limit.
-
-`‹ ›` pages through the accounts in that order (`1/5` is the best). The band goes back to the best
-30 seconds after the last `‹ ›`, and holds the order still while you page. Switch is drawn in the
-accent color when the offered account scores higher than the live one, or the live one is out of
-room.
-
-The mod is an early-access Claude Code feature (function hooks), and its API may change between
-Claude Code releases. If a release breaks it, the command line keeps working.
-
-### Command line
+Weekly room that resets unused is lost, so the band offers the account whose **week resets
+soonest** and that has at least **10% room** left (of its week, and of its session while one is
+running):
 
 ```text
-claude-subs status [--json]     the saved accounts and their usage
+score = 100 × (1 − hours until the week resets ÷ 168)
+      + up to 20 for a running session with room left that resets soon
+```
+
+`‹ ›` pages through the rest, best first (`1/5` is the best), and the band returns to the best
+30 seconds later. **Switch** is highlighted when that account is a better pick than the live one:
+in the picture, `work` is at 93% of its week, so `side` is the one to use.
+
+## Commands
+
+| In Claude Code | Does |
+|---|---|
+| `/subs` | list the accounts |
+| `/subs <account>` | switch, by email, name or number |
+| `/subs refresh` | read every account's usage now |
+| `/subs hide` · `/subs show` | hide or show the band |
+| `/subs above` · `/subs below` | put the band over the prompt or back under it |
+
+```console
+$ claude-subs status
+* 1  work@example.com    session  42% (in 2h 05m)  week  93% (tomorrow 05:00)  live
+  2  side@example.com    session   0%  week  71% (tomorrow 14:00)
+  3  client@example.com  session   0%  week  87% (Tue 13:00)
+  4  lab@example.com     session   -  week  40% (Tue 20:00)
+```
+
+```text
+claude-subs status [--json]     the accounts and their usage
 claude-subs switch <account>    make it the live login
 claude-subs refresh             read every account's usage now
 claude-subs forget <account>    remove a saved account (not the live one)
-claude-subs setup [--remove]    load (or stop loading) the Claude Code mod
+claude-subs setup [--remove]    load (or unload) the Claude Code mod
 ```
 
-### Windows tray
+**Windows tray:** the icon shows the live account's fuller limit, with bars for the session (top)
+and the week (bottom). Hover for the reset times, click for every account with a Switch button,
+right-click to switch, refresh, or start at login. Times follow your 12/24-hour setting.
 
-- **Tray icon:** the number is the fuller of session and week for the live account. The two bars
-  below it are session (top) and week (bottom). Green under 60 %, amber from 60 %, red from 85 %.
-  A red `!` means a limit is reached; `--` means no reading yet.
-- **Hover:** the live account with its reset times, then the others as `name session/week`.
-- **Left click:** the popover lists every saved account with its meters and a Switch button.
-- **Right click:** switch from the menu, Refresh usage, Start at login, Quit.
+<details>
+<summary><b>How it works</b></summary>
 
-**Reset times** follow the Windows 12/24-hour setting (24-hour elsewhere):
+<br>
 
-- Under 6 hours away, a countdown: `in 2h 05m`.
-- Later: `today 18:30`, `tomorrow 11:00`, `Sat 11:00`.
+Claude Code keeps its login in two files: the tokens in `~/.claude/.credentials.json`
+(`claudeAiOauth`) and the account in `~/.claude.json` (`oauthAccount`). Every Claude Code process
+re-reads the credentials before its requests and adopts a changed file. That is how a `/login` in
+one session reaches the others, and how a switch does. Each token refresh replaces the refresh
+token, so a login must live in exactly one place at a time. Claude Subs keeps to that:
 
-## How it works
+- **Capture:** when `.credentials.json` changes (a refresh by Claude Code, or a `/login`), Claude
+  Subs asks whose tokens they are and saves them under that account. The tray app watches the
+  file. On Linux the mod runs `claude-subs tick` when it changes, and `claude-subs sync` before a
+  `/login`.
+- **Switch:** take Claude Code's refresh locks (`~/.claude/.oauth_refresh.lock`, `~/.claude.lock`),
+  save the outgoing tokens, back up `~/.claude.json`, write the incoming account into it (every
+  other key kept), atomically replace `claudeAiOauth` (MCP logins kept), release the locks.
+- **Usage:** for the live account, Claude Code's own cached reading when it is newer, else
+  `GET /api/oauth/usage` at most every 5 minutes; Claude Subs never refreshes the live tokens. The
+  other accounts are read every 15 minutes, refreshing their tokens when needed, which also keeps
+  their 30-day logins alive. On HTTP 429 it backs off, up to an hour.
+- **Several processes:** the tray app and each command change the vault only under `vault.lock`,
+  re-reading it first if another saved in the meantime. Each writes `status.json` (no tokens),
+  which the mod reads.
 
-Claude Code (2.1.x) keeps the login in two files:
+The usage, profile and token endpoints are the ones Claude Code calls. They are not a documented
+API and may change. The mod uses Claude Code's function hooks, an early-access feature; if a
+release breaks the mod, the command line keeps working.
 
-| File | Key | What |
-|---|---|---|
-| `~/.claude/.credentials.json` | `claudeAiOauth` | access and refresh tokens |
-| `~/.claude.json` | `oauthAccount` | who is logged in (email, org, ...) |
+</details>
 
-Every Claude Code process re-checks `.credentials.json` before its requests and adopts a changed
-file (the "sibling login"). Claude Code refreshes tokens under a lock directory,
-`~/.claude/.oauth_refresh.lock` (plus the legacy `~/.claude.lock`). Each refresh rotates the
-refresh token, so a token has to live in exactly one place at a time.
+<details>
+<summary><b>Files</b></summary>
 
-Claude Subs follows that rule:
-
-- **Capture:** new tokens in `.credentials.json` come from a refresh by Claude Code or from a
-  `/login`. Claude Subs asks the profile endpoint whose they are and saves them under that account.
-  - On Windows, the tray app watches the file.
-  - On Linux, the mod runs `claude-subs tick` when the file changes, and `claude-subs sync` before
-    a `/login`.
-
-  So the live account's latest tokens are saved before anything can overwrite them.
-- **Switch:**
-  1. Take Claude Code's refresh locks, so no refresh is in flight.
-  2. Save the outgoing tokens.
-  3. Back up `~/.claude.json` (the last 10 are kept).
-  4. Write the incoming `oauthAccount` into `~/.claude.json` under its own `.lock`, keeping every
-     other key.
-  5. Atomically replace `claudeAiOauth` in `.credentials.json`. Other entries, such as MCP logins,
-     are kept.
-  6. Release the locks.
-- **Usage:**
-  - For the live account, Claude Subs uses Claude Code's own cached reading
-    (`cachedUsageUtilization`) when it is newer. Otherwise it reads `GET /api/oauth/usage` itself
-    with the live access token, at most every 5 minutes. It never refreshes the live tokens;
-    Claude Code owns them.
-  - The other accounts are read every 15 minutes with their saved tokens, which are refreshed when
-    expired. That also keeps their 30-day refresh tokens alive.
-  - On HTTP 429 it backs off, from 5 minutes up to an hour.
-- **Several processes:** the tray app and each command change the vault only while holding
-  `vault.lock`, and read it again first if another process saved in the meantime. Each of them also
-  writes `status.json` (accounts and usage, no tokens), which is what the mod reads.
-
-The usage, profile and token endpoints are the ones Claude Code itself calls. They are not a
-documented public API and may change.
-
-## Files
+<br>
 
 The data folder is `%LOCALAPPDATA%\claude-subs` on Windows and `~/.local/share/claude-subs` on
-Linux (`$XDG_DATA_HOME/claude-subs`). Override it with `CLAUDE_SUBS_DATA_DIR`.
+Linux (`$XDG_DATA_HOME`), or `CLAUDE_SUBS_DATA_DIR`. `CLAUDE_CONFIG_DIR` is honoured as Claude
+Code honours it.
 
-- `vault.dat`: the saved logins and last readings.
-  - Windows: sealed with DPAPI, so only this Windows user on this machine can open it.
-  - Linux: plain JSON readable by your user alone (0600), the way Claude Code keeps
-    `.credentials.json` there.
-- `status.json`: what the mod reads.
-- `settings.json`: `poll_active_secs` (300), `poll_idle_secs` (900), `refresh_idle` (true).
-- `backups/`: `~/.claude.json` before each switch, and `~/.claude/settings.json` before `setup`
-  changes it.
-- `logs/`: daily logs. Tokens are never logged. Set `CLAUDE_SUBS_LOG=debug` for more detail.
+| File | Holds |
+|---|---|
+| `vault.dat` | the saved logins. Windows: sealed with DPAPI for your user on this machine. Linux: readable by your user alone (0600), as Claude Code keeps its own credentials there |
+| `status.json` | accounts and usage, no tokens: what the mod reads |
+| `settings.json` | `poll_active_secs` (300), `poll_idle_secs` (900), `refresh_idle` (true) |
+| `backups/` | `~/.claude.json` before each switch (the last 10), `~/.claude/settings.json` before `setup` |
+| `logs/` | daily logs, never with tokens; `CLAUDE_SUBS_LOG=debug` for more |
 
-`CLAUDE_CONFIG_DIR` is honoured the same way Claude Code honours it.
+</details>
 
 ## Build
 
 ```sh
-cargo test                                 # the switch runs against a sandbox; no network
-cargo build --release                      # Linux: the command line alone
-# Windows, the tray app: the UI is embedded from ui/dist
-cd ui && bun install && bun run build && cd .. && cargo build --release
-claude plugin test mod                     # the mod's tests
+cargo test                                  # the switch runs in a sandbox, no network
+cargo build --release                       # the command line (Linux)
+cd ui && bun install && bun run build && cd .. && cargo build --release   # Windows, with the tray app
+claude plugin test mod                      # the mod's tests
 ```
 
-Linux releases are built by `.github/workflows/release.yml` when a `v*` tag is pushed.
-
-The app icon comes from `app/icons/make-icon.ps1`. The tray icon is drawn in code
-(`app/src/icon.rs`), at the notification area's pixel size so it stays sharp.
+Pushing a `v*` tag builds the Linux releases (`.github/workflows/release.yml`).

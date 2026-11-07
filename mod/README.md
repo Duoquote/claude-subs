@@ -3,7 +3,7 @@
 The Claude Code half of [claude-subs](https://github.com/Duoquote/claude-subs): your Claude
 accounts in a band under the prompt (or above it, with `/subs above`).
 
-- **On the left, the live account:** `● work ∞ │ 79% tmrw 05:00`, its 5-hour session (`∞` where
+- **On the left, the live account:** `● work 42% 2h05 │ 93% tmrw 05:00`, its 5-hour session (`∞` where
   the plan has none, `idle` when not started) and its week, each with when it resets.
 - **On the right, the best account to switch to:** the one whose weekly limit resets soonest with
   at least 10% of room, so no weekly room goes to waste. `‹ 1/5 ›` pages through the rest, best

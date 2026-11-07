@@ -55,16 +55,16 @@ const account = (id: string, short: string, session: Win | null, week: Win, stat
 })
 
 /**
- * The live work, and five others. Best first: lab (its week resets soonest, with room), oss (no
- * 5-hour limit), side; then spare, under 10% of room though it resets sooner; client needs a login.
+ * The live work, and five others. Best first: side (its week resets soonest, with room), lab (no
+ * 5-hour limit), oss; then client, under 10% of room though it resets sooner; spare needs a login.
  */
 const accounts = (liveWeek = 80) => [
   account('A', 'work', window('Session', 42, 2.08, '2h05'), window('Week', liveWeek, 20, 'tmrw 11:00'), 'ok', true),
-  account('B', 'side', idle, window('Week', 30, 100, 'Wed 19:00')),
-  account('C', 'client', idle, window('Week', 0, null, null), 'needs_login'),
-  account('D', 'lab', idle, window('Week', 70, 30, 'Sun 21:00')),
-  account('E', 'oss', null, window('Week', 50, 60, 'Tue 03:00')),
-  account('F', 'spare', idle, window('Week', 95, 10, '01:00')),
+  account('B', 'oss', idle, window('Week', 30, 100, 'Wed 19:00')),
+  account('C', 'spare', idle, window('Week', 0, null, null), 'needs_login'),
+  account('D', 'side', idle, window('Week', 70, 30, 'Sun 21:00')),
+  account('E', 'lab', null, window('Week', 50, 60, 'Tue 03:00')),
+  account('F', 'client', idle, window('Week', 95, 10, '01:00')),
 ]
 
 const status = (liveWeek?: number) => ({
@@ -116,7 +116,7 @@ function world(on: On, ran: string[][], st = status()) {
     return {
       value: {
         exitCode: 0,
-        stdout: 'Switched to lab@example.com.',
+        stdout: 'Switched to side@example.com.',
         stderr: '',
         isStdoutTruncated: false,
         isStderrTruncated: false,
@@ -141,9 +141,9 @@ describe('register', () => {
     const ui = await $.ui.mount(hint(200))
     expect(await ui.find({ type: 'Text', text: /for shortcuts/ })).toBeDefined()
     expect((await ui.find({ type: 'Text', text: /work/ }))?.text).toBe('● work 42% 2h05 │ 80% tmrw 11:00')
-    expect((await ui.find({ type: 'Text', text: /lab/ }))?.text).toBe('lab idle │ 70% Sun 21:00')
+    expect((await ui.find({ type: 'Text', text: /side/ }))?.text).toBe('side idle │ 70% Sun 21:00')
     expect(await ui.find({ type: 'Text', text: /^1\/5$/ })).toBeDefined()
-    // work still has room and its week resets first: lab is no better yet.
+    // work still has room and its week resets first: side is no better yet.
     expect((await ui.find({ key: 'switch-D' }))?.props.variant).toBeUndefined()
 
     await ui.press({ key: 'switch-D' })
@@ -160,27 +160,27 @@ describe('register', () => {
     await $.session.start({ cwd: '/work', surface: 'terminal', isInteractive: true })
     const ui = await $.ui.mount(hint(200))
     // The other account's whole line (its name alone is a Text too, as is the live one's).
-    const shown = async () => (await ui.find({ type: 'Text', text: /^dev\d+ \S/ }))?.text
+    const shown = async () => (await ui.find({ type: 'Text', text: /^(side|lab|oss|client|spare) \S/ }))?.text
 
     await ui.press({ key: 'page-next' })
-    expect(await shown()).toBe('oss ∞ │ 50% Tue 03:00')
+    expect(await shown()).toBe('lab ∞ │ 50% Tue 03:00')
     expect(await ui.find({ type: 'Text', text: /^2\/5$/ })).toBeDefined()
     await ui.press({ key: 'page-next' })
-    expect(await shown()).toBe('side idle │ 30% Wed 19:00')
+    expect(await shown()).toBe('oss idle │ 30% Wed 19:00')
     await ui.press({ key: 'page-next' })
-    expect(await shown()).toBe('spare idle │ 95% 01:00')
+    expect(await shown()).toBe('client idle │ 95% 01:00')
     await ui.press({ key: 'page-next' })
-    expect(await shown()).toBe('client needs /login')
+    expect(await shown()).toBe('spare needs /login')
     expect(await ui.find({ key: 'switch-C' })).toBeUndefined()
     await ui.press({ key: 'page-next' })
-    expect(await shown()).toMatch(/^lab/)
+    expect(await shown()).toMatch(/^side/)
     await ui.press({ key: 'page-prev' })
-    expect(await shown()).toMatch(/^client/)
+    expect(await shown()).toMatch(/^spare/)
 
     await clock.advance(20_000)
-    expect(await shown()).toMatch(/^client/)
+    expect(await shown()).toMatch(/^spare/)
     await clock.advance(15_000)
-    expect(await shown()).toMatch(/^lab/)
+    expect(await shown()).toMatch(/^side/)
     expect(await ui.find({ type: 'Text', text: /^1\/5$/ })).toBeDefined()
     await ui.unmount()
   })
@@ -199,10 +199,10 @@ describe('register', () => {
 
     let ui = await $.ui.mount(hint(80))
     expect((await ui.find({ type: 'Text', text: /work/ }))?.text).toBe('● work 42% 2h05 │ 80% tmrw 11:00')
-    expect((await ui.find({ type: 'Text', text: /lab/ }))?.text).toBe('lab idle │ 70%')
+    expect((await ui.find({ type: 'Text', text: /side/ }))?.text).toBe('side idle │ 70%')
     await ui.unmount()
 
-    ui = await $.ui.mount(hint(60))
+    ui = await $.ui.mount(hint(62))
     expect((await ui.find({ type: 'Text', text: /work/ }))?.text).toBe('● work 42% │ 80%')
     await ui.unmount()
   })
