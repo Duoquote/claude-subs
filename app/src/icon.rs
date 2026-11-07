@@ -233,6 +233,7 @@ mod previews {
         std::fs::create_dir_all(&dir).unwrap();
         let cases = [
             ("27-54", Some(54.0), Some(27.0), Some(54.0)),
+            ("42-93", Some(93.0), Some(42.0), Some(93.0)),
             ("80-20", Some(80.0), Some(80.0), Some(20.0)),
             ("92-61", Some(92.0), Some(92.0), Some(61.0)),
             ("5-3", Some(5.0), Some(5.0), Some(3.0)),

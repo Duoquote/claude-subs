@@ -17,7 +17,8 @@
 - **In Claude Code:** a band under the prompt. Your live account is on the left, and the best
   account to switch to is on the right. Click **Switch**, and every running session carries on
   with that account.
-- **On Windows:** a tray icon with the live account's usage, and a popover of all your accounts.
+- **On Windows:** a [tray icon](#windows-tray) with the live account's usage, and a popover of all
+  your accounts.
 - **Anywhere:** `claude-subs status`, `claude-subs switch <account>`.
 
 ## Install
@@ -78,6 +79,22 @@ score = 100 × (1 − hours until the week resets ÷ 168)
 30 seconds later. **Switch** is highlighted when that account is a better pick than the live one:
 in the picture, `work` is at 93% of its week, so `side` is the one to use.
 
+## Windows tray
+
+<p align="center">
+  <img src="docs/tray.png" width="360" alt="The tray popover above the taskbar: every saved account with its session and week meters, reset times and a Switch button">
+</p>
+
+Click the icon for every account, with its meters and a **Switch** button. Hover for the reset
+times; right-click to switch, refresh, or start at login. Times follow your 12/24-hour setting.
+
+The icon shows the live account's fuller limit as a number, over two bars: the session on top,
+the week below.
+
+<p align="center">
+  <img src="docs/tray-icons.png" width="538" alt="Tray icon states: 54% in white, 80% in amber, 93% in red, ! at the limit, -- before the first reading">
+</p>
+
 ## Commands
 
 | In Claude Code | Does |
@@ -103,10 +120,6 @@ claude-subs refresh             read every account's usage now
 claude-subs forget <account>    remove a saved account (not the live one)
 claude-subs setup [--remove]    load (or unload) the Claude Code mod
 ```
-
-**Windows tray:** the icon shows the live account's fuller limit, with bars for the session (top)
-and the week (bottom). Hover for the reset times, click for every account with a Switch button,
-right-click to switch, refresh, or start at login. Times follow your 12/24-hour setting.
 
 <details>
 <summary><b>How it works</b></summary>
