@@ -50,6 +50,8 @@ declare module 'claude-code' {
       busy: string | null
       hidden: boolean
       placement: 'below' | 'above'
+      /** Which page of the other accounts the band shows, from 0. */
+      page: number
     }
   }
 }

@@ -65,6 +65,7 @@ const STATUS = {
     account('A', 'work', true, 42, 91),
     account('B', 'side', false, 12, 30),
     account('C', 'client', false, 0, 0, 'needs_login'),
+    account('D', 'lab', false, 70, 88),
   ],
 }
 
@@ -111,19 +112,25 @@ function world(on: On, ran: string[][]) {
   })
 }
 
+/** The hint line's site on a screen `columns` wide. */
+const hint = (columns: number) => ({ ...HINT, surface: 'terminal', viewport: { columns, rows: 40 } }) as const
+
 describe('register', () => {
-  test('the band sits under the prompt, keeps the hint line, and switches on a press', async ($, on) => {
+  test('a wide band keeps the hint line, shows every account with its resets, and switches on a press', async ($, on) => {
     const ran: string[][] = []
     world(on, ran)
     await $.session.start({ cwd: '/work', surface: 'terminal', isInteractive: false })
 
-    const ui = await $.ui.mount({ ...HINT, surface: 'terminal' })
+    const ui = await $.ui.mount(hint(300))
     expect(await ui.find({ type: 'Text', text: /for shortcuts/ })).toBeDefined()
     const live = await ui.find({ type: 'Text', text: /work/ })
-    expect(live?.text).toContain('session 42%')
-    expect(live?.text).toContain('week 91%')
-    expect(await ui.find({ type: 'Text', text: /client: needs \/login/ })).toBeDefined()
+    expect(live?.text).toContain('session 42% in 2h 05m')
+    expect(live?.text).toContain('week 91% tomorrow 11:00')
+    expect((await ui.find({ type: 'Text', text: /side/ }))?.text).toContain('week 30% tomorrow 11:00')
+    expect(await ui.find({ type: 'Text', text: /client  needs \/login/ })).toBeDefined()
     expect(await ui.find({ key: 'switch-C' })).toBeUndefined()
+    expect(await ui.find({ key: 'switch-D' })).toBeDefined()
+    expect(await ui.find({ key: 'page-next' })).toBeUndefined()
 
     await ui.press({ key: 'switch-B' })
     expect(ran[0]).toEqual(['/opt/claude-subs/bin/claude-subs', 'switch', 'B'])
@@ -132,6 +139,42 @@ describe('register', () => {
     const above = await $.ui.mount({ ...ABOVE, surface: 'terminal' })
     expect((await above.find({ type: 'Text' }))?.text).toBe('engine band')
     await above.unmount()
+  })
+
+  test('a narrower band pages through the other accounts', async ($, on) => {
+    world(on, [])
+    await $.session.start({ cwd: '/work', surface: 'terminal', isInteractive: false })
+
+    const ui = await $.ui.mount(hint(200))
+    expect((await ui.find({ type: 'Text', text: /side/ }))?.text).toContain('session 12% in 2h 05m')
+    expect(await ui.find({ key: 'switch-B' })).toBeDefined()
+    expect(await ui.find({ key: 'switch-D' })).toBeUndefined()
+    expect(await ui.find({ type: 'Text', text: /^1\/3$/ })).toBeDefined()
+
+    await ui.press({ key: 'page-next' })
+    expect(await ui.find({ type: 'Text', text: /client  needs \/login/ })).toBeDefined()
+    expect(await ui.find({ key: 'switch-B' })).toBeUndefined()
+    await ui.press({ key: 'page-next' })
+    expect(await ui.find({ key: 'switch-D' })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /^3\/3$/ })).toBeDefined()
+    await ui.press({ key: 'page-next' })
+    expect(await ui.find({ key: 'switch-B' })).toBeDefined()
+    await ui.press({ key: 'page-prev' })
+    expect(await ui.find({ key: 'switch-D' })).toBeDefined()
+    await ui.unmount()
+  })
+
+  test('at 120 columns the live account keeps its resets and the others drop theirs', async ($, on) => {
+    world(on, [])
+    await $.session.start({ cwd: '/work', surface: 'terminal', isInteractive: false })
+
+    const ui = await $.ui.mount(hint(120))
+    expect((await ui.find({ type: 'Text', text: /work/ }))?.text).toContain('week 91% tomorrow 11:00')
+    const other = await ui.find({ type: 'Text', text: /side/ })
+    expect(other?.text).toContain('week 30%')
+    expect(other?.text).not.toContain('tomorrow')
+    expect(await ui.find({ type: 'Text', text: /^1\/3$/ })).toBeDefined()
+    await ui.unmount()
   })
 
   test('/subs above moves the band over the prompt', async ($, on) => {

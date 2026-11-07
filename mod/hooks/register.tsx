@@ -1,6 +1,7 @@
-// Claude Subs in Claude Code: a band under the prompt (or above it) with the live account's usage and a button
-// per saved account; a press switches the login, and every running session follows (the same way
-// a /login in one session reaches the others).
+// Claude Subs in Claude Code: a band under the prompt (or above it). On its left the live account's
+// usage; on its right the other saved accounts, a page at a time, each with a Switch button. A press
+// switches the login, and every running session follows (the same way a /login in one session
+// reaches the others).
 //
 // The accounts come from `status.json`, which the claude-subs binary writes (the Windows tray app,
 // or each command this mod runs). Switching runs `claude-subs switch <id>`. Where no tray app
@@ -20,6 +21,8 @@ const busy = atom({ plugin: 'subs-switcher', key: 'busy' } as const, null)
 const hidden = atom({ plugin: 'subs-switcher', key: 'hidden' } as const, false)
 /** Where the band draws: under the prompt (the hint line's row, the default) or above it. */
 const placement = atom({ plugin: 'subs-switcher', key: 'placement' } as const, 'below')
+/** Which page of the other accounts the band shows. */
+const page = atom({ plugin: 'subs-switcher', key: 'page' } as const, 0)
 
 /** Where claude-subs and Claude Code keep their files on this machine. */
 type Where = {
@@ -159,6 +162,8 @@ async function switchTo($: Engine, a: SubsAccount) {
   await load($, true)
   if (r.ok) {
     $.ui.toast(`Switched to ${a.email}`)
+    // The others are now another list.
+    await update($, page, () => 0)
     // The new account's first reading.
     void tick($)
   } else {
@@ -166,7 +171,77 @@ async function switchTo($: Engine, a: SubsAccount) {
   }
 }
 
-/** The band: the live account's usage, then a button per other saved account; null with none. */
+// The band's widths, in terminal cells. A Button is `[ label ]` on the terminal.
+const SWITCH = '[ Switch ]'.length
+const ARROW = '[ ‹ ]'.length
+/** Between the accounts on the right. */
+const GAP = 2
+/** At least, between the live account and the others. */
+const MIDDLE = 3
+/** What the prompt's own padding takes from the screen's width. */
+const MARGIN = 4
+
+/** Cells a text takes: one per character, which holds for the names, numbers and times drawn here. */
+const cells = (s: string) => [...s].length
+const pct = (w: SubsWindow | null) => (w === null ? '–' : `${Math.round(w.percent)}%`)
+const tone = (w: SubsWindow | null) =>
+  w === null ? undefined : w.percent >= 85 ? 'error' : w.percent >= 60 ? 'warning' : undefined
+
+// The band's texts as strings, to measure them; `band` draws the same.
+const meterText = (label: string, w: SubsWindow | null, resets: boolean) =>
+  `${label} ${pct(w)}${resets && w?.resets ? ` ${w.resets}` : ''}`
+const usageText = (a: SubsAccount, resets: boolean) =>
+  `${a.short}  ${meterText('session', a.session, resets)}  ${meterText('week', a.week, resets)}`
+const liveWidth = (a: SubsAccount | undefined, resets: boolean) =>
+  a ? cells(`● ${usageText(a, resets)}`) : cells('No live account')
+const otherWidth = (a: SubsAccount, resets: boolean) =>
+  a.status === 'needs_login' ? cells(`${a.short}  needs /login`) : cells(usageText(a, resets)) + 1 + SWITCH
+const pagerWidth = (pages: number) => ARROW + 1 + cells(`${pages}/${pages}`) + 1 + ARROW
+
+/** How the band is laid out: whose reset times show, how many other accounts a page holds. */
+type Fit = { liveResets: boolean; otherResets: boolean; perPage: number; ownRow: boolean }
+
+/** How many of `others` fit side by side in `room`: all of them, or as many as fit beside the pager. */
+function perPage(room: number, others: SubsAccount[], resets: boolean): number {
+  const widest = Math.max(...others.map(a => otherWidth(a, resets)))
+  const fits = (r: number) => Math.floor((r + GAP) / (widest + GAP))
+  if (fits(room) >= others.length) {
+    return others.length
+  }
+  return Math.max(0, fits(room - GAP - pagerWidth(others.length)))
+}
+
+/**
+ * The fullest band that fits one row: every reset time, then the others' left out, then the live
+ * account's too. Narrower still, the others go on a row of their own, one or more a page.
+ */
+function fit(room: number, live: SubsAccount | undefined, others: SubsAccount[]): Fit {
+  if (others.length === 0) {
+    return { liveResets: liveWidth(live, true) <= room, otherResets: false, perPage: 1, ownRow: false }
+  }
+  for (const [liveResets, otherResets] of [
+    [true, true],
+    [true, false],
+    [false, false],
+  ] as const) {
+    const n = perPage(room - liveWidth(live, liveResets) - MIDDLE, others, otherResets)
+    if (n > 0) {
+      return { liveResets, otherResets, perPage: n, ownRow: false }
+    }
+  }
+  const otherResets = perPage(room, others, true) > 0
+  return {
+    liveResets: liveWidth(live, true) <= room,
+    otherResets,
+    perPage: Math.max(1, perPage(room, others, otherResets)),
+    ownRow: true,
+  }
+}
+
+/**
+ * The band: on the left the live account's usage; on the right the other saved accounts, a page
+ * at a time, each with its usage and a Switch button. Null with no accounts.
+ */
 async function band($: Engine, ui: ElementTable, columns: number) {
   const st = await read($, status)
   if (st === null || st.accounts.length === 0) {
@@ -176,45 +251,82 @@ async function band($: Engine, ui: ElementTable, columns: number) {
   const { Box, Button, Text } = ui
   const live = st.accounts.find(a => a.active)
   const others = st.accounts.filter(a => !a.active)
-  const resets = (w: SubsWindow | null) =>
-    columns >= 90 && w?.resets ? <Text dimColor> {w.resets}</Text> : null
+  const f = fit(columns - MARGIN, live, others)
+  const pages = Math.max(1, Math.ceil(others.length / f.perPage))
+  const at = Math.min(await read($, page), pages - 1)
+  const shown = others.slice(at * f.perPage, (at + 1) * f.perPage)
+  const turn = (to: number) => () => update($, page, () => (to + pages) % pages)
 
-  return (
-    <Box flexDirection="row" flexWrap="wrap" columnGap={2}>
-      {live ? (
-        <Text>
-          <Text color="success">●</Text> <Text weight="bold">{live.short}</Text>
-          {'  '}session <Text color={tone(live.session)}>{pct(live.session)}%</Text>
-          {resets(live.session)}
-          {'  '}week <Text color={tone(live.week)}>{pct(live.week)}%</Text>
-          {resets(live.week)}
-        </Text>
-      ) : (
-        <Text dimColor>No live account</Text>
-      )}
-      {others.map(a =>
-        a.status === 'needs_login' ? (
-          <Text dimColor>{a.short}: needs /login</Text>
-        ) : (
-          <Button
-            key={`switch-${a.id}`}
-            label={`Switch to ${a.short}`}
-            dimColor={switching !== null}
-            onPress={() => switchTo($, a)}
-          >
-            {a.short} <Text color={tone(a.session)}>{pct(a.session)}</Text>/
-            <Text color={tone(a.week)}>{pct(a.week)}</Text>
-          </Button>
-        ),
-      )}
-      {switching !== null && <Text dimColor>switching to {switching}…</Text>}
+  const meter = (label: string, w: SubsWindow | null, resets: boolean) => (
+    <Text>
+      {label} <Text color={tone(w)}>{pct(w)}</Text>
+      {resets && w?.resets ? <Text dimColor> {w.resets}</Text> : null}
+    </Text>
+  )
+  const usage = (a: SubsAccount, resets: boolean) => (
+    <Text>
+      {'  '}
+      {meter('session', a.session, resets)}
+      {'  '}
+      {meter('week', a.week, resets)}
+    </Text>
+  )
+
+  const left = live ? (
+    <Text>
+      <Text color="success">●</Text> <Text weight="bold">{live.short}</Text>
+      {usage(live, f.liveResets)}
+    </Text>
+  ) : (
+    <Text dimColor>No live account</Text>
+  )
+
+  const right =
+    switching !== null ? (
+      <Text dimColor>switching to {switching}…</Text>
+    ) : others.length === 0 ? null : (
+      <Box flexDirection="row" columnGap={GAP}>
+        {shown.map(a =>
+          a.status === 'needs_login' ? (
+            <Text dimColor>{a.short}  needs /login</Text>
+          ) : (
+            <Box flexDirection="row" columnGap={1}>
+              <Text>
+                {a.short}
+                {usage(a, f.otherResets)}
+              </Text>
+              <Button key={`switch-${a.id}`} label={`Switch to ${a.short}`} onPress={() => switchTo($, a)}>
+                Switch
+              </Button>
+            </Box>
+          ),
+        )}
+        {pages > 1 && (
+          <Box flexDirection="row" columnGap={1}>
+            <Button key="page-prev" label="Previous accounts" onPress={turn(at - 1)}>
+              ‹
+            </Button>
+            <Text dimColor>{`${at + 1}/${pages}`.padStart(cells(`${pages}/${pages}`))}</Text>
+            <Button key="page-next" label="Next accounts" onPress={turn(at + 1)}>
+              ›
+            </Button>
+          </Box>
+        )}
+      </Box>
+    )
+
+  return f.ownRow ? (
+    <Box flexDirection="column">
+      {left}
+      {right}
+    </Box>
+  ) : (
+    <Box flexDirection="row" justifyContent="space-between" columnGap={MIDDLE} width="100%">
+      {left}
+      {right}
     </Box>
   )
 }
-
-const tone = (w: SubsWindow | null) =>
-  w === null ? undefined : w.percent >= 85 ? 'error' : w.percent >= 60 ? 'warning' : undefined
-const pct = (w: SubsWindow | null) => (w === null ? '–' : `${Math.round(w.percent)}`)
 
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {

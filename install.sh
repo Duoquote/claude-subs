@@ -1,6 +1,6 @@
 #!/bin/sh
-# claude-subs for Linux: the command line, and the Claude Code mod that puts your accounts above
-# the prompt with a button per account.
+# claude-subs for Linux: the command line, and the Claude Code mod that puts your accounts under
+# the prompt, each with a Switch button.
 #
 #   curl -fsSL https://raw.githubusercontent.com/Duoquote/claude-subs/main/install.sh | sh
 #
