@@ -1,5 +1,5 @@
 //! The command line: what the Claude Code mod runs for its account band, and what a person runs
-//! on a machine with no tray (Linux).
+//! on a machine with no tray (Linux, macOS).
 //!
 //! Each command runs an engine once: it takes in the live login first (so a `/login` or a token
 //! refresh since the last look is saved), does its work under the vault lock, and leaves
@@ -95,6 +95,10 @@ async fn run(paths: Paths, args: &[String]) -> Result<ExitCode> {
     let synced = engine.sync_now().await;
     if let Err(e) = &synced {
         tracing::warn!("sync: {e:#}");
+        // Said to the person too (the mod's own `tick` runs keep it to the log).
+        if command != "tick" && command != "sync" {
+            eprintln!("claude-subs: could not read Claude Code's login: {e:#}");
+        }
     }
     match command {
         "sync" => {

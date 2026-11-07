@@ -22,6 +22,10 @@ pub struct Paths {
     /// `%LOCALAPPDATA%\claude-subs` on Windows and `$XDG_DATA_HOME/claude-subs` (or
     /// `~/.local/share/claude-subs`) elsewhere.
     pub data_dir: PathBuf,
+    /// macOS: the keychain item Claude Code keeps its login in (`.credentials.json` is its
+    /// fallback). Set by `detect`; a sandbox (`new`) has none.
+    #[cfg(target_os = "macos")]
+    pub keychain: Option<crate::keychain::Item>,
 }
 
 impl Paths {
@@ -48,7 +52,13 @@ impl Paths {
                     .join("claude-subs")
             }
         });
-        Self::new(claude_dir, global_config, data_dir)
+        #[cfg_attr(not(target_os = "macos"), allow(unused_mut))]
+        let mut paths = Self::new(claude_dir, global_config, data_dir);
+        #[cfg(target_os = "macos")]
+        {
+            paths.keychain = Some(crate::keychain::Item::claude_code());
+        }
+        paths
     }
 
     pub fn new(claude_dir: PathBuf, global_config: PathBuf, data_dir: PathBuf) -> Self {
@@ -64,6 +74,8 @@ impl Paths {
             claude_dir,
             global_config,
             data_dir,
+            #[cfg(target_os = "macos")]
+            keychain: None,
         }
     }
 

@@ -7,7 +7,7 @@
 
 <p align="center">
   <a href="https://github.com/Duoquote/claude-subs/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/Duoquote/claude-subs?style=flat-square"></a>
-  <img alt="Linux and Windows" src="https://img.shields.io/badge/platform-linux%20%7C%20windows-informational?style=flat-square">
+  <img alt="Linux, macOS and Windows" src="https://img.shields.io/badge/platform-linux%20%7C%20macos%20%7C%20windows-informational?style=flat-square">
 </p>
 
 <p align="center">
@@ -23,7 +23,7 @@
 
 ## Install
 
-**Linux** (x86_64, aarch64):
+**Linux and macOS** (x86_64, arm64):
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/Duoquote/claude-subs/main/install.sh | sh
@@ -31,6 +31,10 @@ curl -fsSL https://raw.githubusercontent.com/Duoquote/claude-subs/main/install.s
 
 Run it again to update. `... | sh -s -- --uninstall` removes it; your saved logins stay in
 `~/.local/share/claude-subs` until you delete that folder.
+
+On macOS, Claude Code keeps its login in the login keychain, and claude-subs reads and writes it
+there the way Claude Code does. macOS keeps that keychain closed to SSH sessions, so use Claude Code
+and claude-subs from a terminal on the Mac itself.
 
 **Windows:** [build it](#build), start `target\release\claude-subs.exe`, then load the mod:
 
@@ -126,16 +130,17 @@ claude-subs setup [--remove]    load (or unload) the Claude Code mod
 
 <br>
 
-Claude Code keeps its login in two files: the tokens in `~/.claude/.credentials.json`
-(`claudeAiOauth`) and the account in `~/.claude.json` (`oauthAccount`). Every Claude Code process
-re-reads the credentials before its requests and adopts a changed file. That is how a `/login` in
+Claude Code keeps its login in two places: the tokens in `~/.claude/.credentials.json`
+(`claudeAiOauth`; on macOS, the keychain item `Claude Code-credentials`) and the account in
+`~/.claude.json` (`oauthAccount`). Every Claude Code process re-reads the credentials before its
+requests (on macOS, at most 30 seconds later) and adopts what changed. That is how a `/login` in
 one session reaches the others, and how a switch does. Each token refresh replaces the refresh
 token, so a login must live in exactly one place at a time. Claude Subs keeps to that:
 
-- **Capture:** when `.credentials.json` changes (a refresh by Claude Code, or a `/login`), Claude
-  Subs asks whose tokens they are and saves them under that account. The tray app watches the
-  file. On Linux the mod runs `claude-subs tick` when it changes, and `claude-subs sync` before a
-  `/login`.
+- **Capture:** when the credentials change (a refresh by Claude Code, or a `/login`), Claude Subs
+  asks whose tokens they are and saves them under that account. The tray app watches the file. On
+  Linux and macOS the mod runs `claude-subs tick` when the file changes or the readings are 90
+  seconds old, and `claude-subs sync` before a `/login`.
 - **Switch:** take Claude Code's refresh locks (`~/.claude/.oauth_refresh.lock`, `~/.claude.lock`),
   save the outgoing tokens, back up `~/.claude.json`, write the incoming account into it (every
   other key kept), atomically replace `claudeAiOauth` (MCP logins kept), release the locks.
@@ -159,12 +164,12 @@ release breaks the mod, the command line keeps working.
 <br>
 
 The data folder is `%LOCALAPPDATA%\claude-subs` on Windows and `~/.local/share/claude-subs` on
-Linux (`$XDG_DATA_HOME`), or `CLAUDE_SUBS_DATA_DIR`. `CLAUDE_CONFIG_DIR` is honoured as Claude
+Linux and macOS (`$XDG_DATA_HOME`), or `CLAUDE_SUBS_DATA_DIR`. `CLAUDE_CONFIG_DIR` is honoured as Claude
 Code honours it.
 
 | File | Holds |
 |---|---|
-| `vault.dat` | the saved logins. Windows: sealed with DPAPI for your user on this machine. Linux: readable by your user alone (0600), as Claude Code keeps its own credentials there |
+| `vault.dat` | the saved logins. Windows: sealed with DPAPI for your user on this machine. Linux and macOS: a file only your user can read (0600) |
 | `status.json` | accounts and usage, no tokens: what the mod reads |
 | `settings.json` | `poll_active_secs` (300), `poll_idle_secs` (900), `refresh_idle` (true) |
 | `backups/` | `~/.claude.json` before each switch (the last 10), `~/.claude/settings.json` before `setup` |
@@ -176,9 +181,9 @@ Code honours it.
 
 ```sh
 cargo test                                  # the switch runs in a sandbox, no network
-cargo build --release                       # the command line (Linux)
+cargo build --release                       # the command line (Linux, macOS)
 cd ui && bun install && bun run build && cd .. && cargo build --release   # Windows, with the tray app
 claude plugin test mod                      # the mod's tests
 ```
 
-Pushing a `v*` tag builds the Linux releases (`.github/workflows/release.yml`).
+Pushing a `v*` tag builds the Linux and macOS releases (`.github/workflows/release.yml`).

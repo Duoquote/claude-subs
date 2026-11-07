@@ -1,6 +1,6 @@
 #!/bin/sh
-# claude-subs for Linux: the command line, and the Claude Code mod that puts your accounts under
-# the prompt, each with a Switch button.
+# claude-subs for Linux and macOS: the command line, and the Claude Code mod that puts your
+# accounts under the prompt, with a Switch button.
 #
 #   curl -fsSL https://raw.githubusercontent.com/Duoquote/claude-subs/main/install.sh | sh
 #
@@ -21,10 +21,14 @@ fail() {
 }
 
 [ -n "${HOME:-}" ] || fail "HOME is not set"
-[ "$(uname -s)" = Linux ] || fail "this installer is for Linux (on Windows, build the tray app: see the README)"
+case "$(uname -s)" in
+  Linux) os=unknown-linux-musl ;;
+  Darwin) os=apple-darwin ;;
+  *) fail "this installer is for Linux and macOS (on Windows, build the tray app: see the README)" ;;
+esac
 case "$(uname -m)" in
-  x86_64 | amd64) target=x86_64-unknown-linux-musl ;;
-  aarch64 | arm64) target=aarch64-unknown-linux-musl ;;
+  x86_64 | amd64) target="x86_64-$os" ;;
+  aarch64 | arm64) target="aarch64-$os" ;;
   *) fail "there is no build for $(uname -m)" ;;
 esac
 

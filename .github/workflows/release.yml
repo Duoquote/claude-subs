@@ -1,5 +1,5 @@
-# A tag `v*` builds the Linux binaries (static, musl) and publishes them with the mod as a release,
-# which install.sh downloads.
+# A tag `v*` builds the Linux (static, musl) and macOS binaries and publishes them with the mod as
+# a release, which install.sh downloads.
 name: release
 
 on:
@@ -21,13 +21,21 @@ jobs:
             runner: ubuntu-24.04
           - target: aarch64-unknown-linux-musl
             runner: ubuntu-24.04-arm
+          - target: aarch64-apple-darwin
+            runner: macos-15
+          # Cross-built on the arm64 runner: checked with lipo rather than run.
+          - target: x86_64-apple-darwin
+            runner: macos-15
+            cross: true
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
       - name: Toolchain
         run: |
-          sudo apt-get update -q
-          sudo apt-get install -y -q musl-tools
+          if [ "$RUNNER_OS" = Linux ]; then
+            sudo apt-get update -q
+            sudo apt-get install -y -q musl-tools
+          fi
           if ! command -v rustup >/dev/null; then
             curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal
             echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
@@ -48,9 +56,9 @@ jobs:
           cp target/${{ matrix.target }}/release/claude-subs pkg/bin/
           cp -r mod/.claude-plugin mod/hooks mod/types mod/README.md pkg/mod/
           cp README.md pkg/
-          ./pkg/bin/claude-subs version
+          if [ "${{ matrix.cross }}" = true ]; then lipo -archs pkg/bin/claude-subs; else ./pkg/bin/claude-subs version; fi
           tar -czf "$name.tar.gz" -C pkg .
-          sha256sum "$name.tar.gz" > "$name.tar.gz.sha256"
+          if command -v sha256sum >/dev/null; then sha256sum "$name.tar.gz"; else shasum -a 256 "$name.tar.gz"; fi > "$name.tar.gz.sha256"
       - uses: actions/upload-artifact@v4
         with:
           name: claude-subs-${{ matrix.target }}
@@ -74,4 +82,4 @@ jobs:
           gh release create "$GITHUB_REF_NAME" dist/* \
             --repo "$GITHUB_REPOSITORY" \
             --title "$GITHUB_REF_NAME" \
-            --notes "Linux binaries and the Claude Code mod. Install or update: curl -fsSL https://raw.githubusercontent.com/$GITHUB_REPOSITORY/main/install.sh | sh"
+            --notes "Linux and macOS binaries and the Claude Code mod. Install or update: curl -fsSL https://raw.githubusercontent.com/$GITHUB_REPOSITORY/main/install.sh | sh"

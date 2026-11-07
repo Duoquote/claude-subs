@@ -6,7 +6,7 @@
 //
 // The accounts come from `status.json`, which the claude-subs binary writes (the Windows tray app,
 // or each command this mod runs). Switching runs `claude-subs switch <id>`. Where no tray app
-// keeps the readings fresh (Linux), the mod runs `claude-subs tick` itself: once the status is a
+// keeps the readings fresh (Linux, macOS), the mod runs `claude-subs tick` itself: once the status is a
 // minute and a half old, and when Claude Code's credentials file changes (a token refresh or a
 // /login), so the latest tokens are always saved before anything can replace them.
 

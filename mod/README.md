@@ -17,7 +17,7 @@ accounts in a band under the prompt (or above it, with `/subs above`).
   too.
 
 The mod does none of the work itself. It reads `status.json` in claude-subs' data folder and runs
-the `claude-subs` binary (`switch`, `tick`, `sync`). On Linux, where no tray app runs, it also runs
+the `claude-subs` binary (`switch`, `tick`, `sync`). On Linux and macOS, where no tray app runs, it also runs
 `claude-subs tick` once the status is 90 seconds old, and whenever Claude Code's credentials file
 changes. That way the latest tokens are always saved before a `/login` can replace them.
 

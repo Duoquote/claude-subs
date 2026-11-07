@@ -2,6 +2,7 @@
 //! Claude Code wrote them, plus the last usage reading, in `vault.dat`: sealed with DPAPI on Windows
 //! (this Windows user on this machine alone can open it); elsewhere plain JSON readable by this user
 //! alone (0600), which is how Claude Code itself keeps `.credentials.json` on Linux.
+//! (On macOS, Claude Code's own login is in the keychain: see `keychain.rs`.)
 //!
 //! One rule keeps the tokens alive: an account's refresh token lives in one place at a time. While
 //! an account is live, Claude Code owns (and rotates) its tokens and the vault copy is only a mirror

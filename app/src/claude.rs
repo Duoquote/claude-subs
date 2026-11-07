@@ -3,6 +3,8 @@
 //! A running Claude Code checks `.credentials.json` before its requests (mtime, or with the v5
 //! store dev:ino:size:mtime) and on a change drops its cached token and adopts what is on disk
 //! ("sibling login"). So an atomic replacement of `claudeAiOauth` switches every running instance.
+//! On macOS the same JSON lives in the login keychain (`keychain.rs`), which a running Claude Code
+//! reads again every 30 seconds; the file is only its fallback.
 //! `oauthAccount` in `~/.claude.json` is who the UI says is logged in; it is replaced first.
 //!
 //! Ordering with Claude Code's own refresh: it holds `.oauth_refresh.lock` (and the legacy lock)
@@ -52,8 +54,31 @@ pub fn expires_at(creds: &Value) -> i64 {
     creds.get("expiresAt").and_then(Value::as_i64).unwrap_or(0)
 }
 
+/// Claude Code's whole credentials JSON (`claudeAiOauth`, `mcpOAuth`, ...): on macOS from the
+/// keychain when it holds the item, else (and elsewhere) from `.credentials.json`.
+fn read_credentials(paths: &Paths) -> Result<Option<Value>> {
+    #[cfg(target_os = "macos")]
+    if let Some(item) = &paths.keychain
+        && let Some(value) = item.read()?
+    {
+        return Ok(Some(value));
+    }
+    fsx::read_json(&paths.credentials)
+}
+
+/// How long ago the live login last changed (a refresh, a /login); `None` when there is none.
+pub fn credentials_age(paths: &Paths) -> Option<Duration> {
+    #[cfg(target_os = "macos")]
+    if let Some(item) = &paths.keychain
+        && let Some(age) = item.age()
+    {
+        return Some(age);
+    }
+    fsx::age(&paths.credentials)
+}
+
 pub fn read_live(paths: &Paths) -> Result<Live> {
-    let creds = fsx::read_json(&paths.credentials)?
+    let creds = read_credentials(paths)?
         .and_then(|mut v| v.get_mut("claudeAiOauth").map(Value::take))
         .filter(|v| v.is_object());
     let (account, usage_cache) = match fsx::read_json(&paths.global_config)? {
@@ -103,8 +128,23 @@ pub async fn write_oauth_account(paths: &Paths, account: &Value) -> Result<()> {
     fsx::write_atomic(&paths.global_config, text.as_bytes())
 }
 
-/// Sets `claudeAiOauth` in `.credentials.json`; other entries (MCP server logins) are kept.
+/// Sets `claudeAiOauth` in `.credentials.json` (on macOS, in the keychain item); other entries
+/// (MCP server logins) are kept.
 pub fn write_credentials(paths: &Paths, creds: &Value) -> Result<()> {
+    #[cfg(target_os = "macos")]
+    if let Some(item) = &paths.keychain {
+        // Where Claude Code reads first. Only when the item is missing and the file is there is
+        // Claude Code on its plaintext fallback, and the file below is what it reads.
+        let current = item.read()?;
+        if current.is_some() || !paths.credentials.exists() {
+            let mut value = current.unwrap_or_else(|| Value::Object(Map::new()));
+            let Some(obj) = value.as_object_mut() else {
+                bail!("Claude Code's keychain item is not a JSON object");
+            };
+            obj.insert("claudeAiOauth".into(), creds.clone());
+            return item.write(&value);
+        }
+    }
     let mut file = fsx::read_json(&paths.credentials)?.unwrap_or_else(|| Value::Object(Map::new()));
     let Some(obj) = file.as_object_mut() else {
         bail!("{} is not a JSON object", paths.credentials.display());

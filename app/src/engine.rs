@@ -492,8 +492,8 @@ impl Engine {
     /// One look at the live login, for a command: a `/login` still being written (a file changed
     /// in the last 15 s) is left for the next look.
     pub async fn sync_now(&self) -> Result<bool> {
-        let quiet = |p: &std::path::Path| fsx::age(p).is_none_or(|age| age >= Duration::from_secs(15));
-        let settled = quiet(&self.paths.credentials) && quiet(&self.paths.global_config);
+        let quiet = |age: Option<Duration>| age.is_none_or(|age| age >= Duration::from_secs(15));
+        let settled = quiet(claude::credentials_age(&self.paths)) && quiet(fsx::age(&self.paths.global_config));
         self.sync(settled).await
     }
 

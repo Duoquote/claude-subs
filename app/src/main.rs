@@ -7,7 +7,7 @@
 //!
 //! On Windows, run without arguments, it is a tray app. On every platform it is also a command
 //! line (`claude-subs status`, `switch`, ...): what the Claude Code mod in `mod/` runs for its
-//! account band, and all there is on Linux.
+//! account band, and all there is on Linux and macOS.
 #![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
 
 mod api;
@@ -21,6 +21,8 @@ mod fsx;
 mod gui;
 #[cfg(windows)]
 mod icon;
+#[cfg(target_os = "macos")]
+mod keychain;
 mod lock;
 mod paths;
 #[cfg(windows)]
