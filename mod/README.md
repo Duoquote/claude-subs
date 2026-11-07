@@ -3,12 +3,14 @@
 The Claude Code half of [claude-subs](https://github.com/Duoquote/claude-subs): your Claude
 accounts in a band under the prompt (or above it, with `/subs above`).
 
-- **The live account:** session and weekly usage, with reset times.
-- **The other saved accounts,** on the right, as many as the width holds, with `[ ‹ ] 1/3 [ › ]`
-  to page through the rest. Each shows its usage and reset times and a **Switch** button. Click it
-  (fullscreen mode): Claude Code switches to that account, and every running session follows from
-  its next request. Above the prompt the band can also be focused with `ctrl+x tab`, then Enter
-  presses a button.
+- **On the left, the live account:** `● work ∞ │ 79% tmrw 05:00`, its 5-hour session (`∞` where
+  the plan has none, `idle` when not started) and its week, each with when it resets.
+- **On the right, the best account to switch to:** the one whose weekly limit resets soonest with
+  at least 10% of room, so no weekly room goes to waste. `‹ 1/5 ›` pages through the rest, best
+  first, and the band goes back to the best 30 seconds later. Click **Switch** (fullscreen mode):
+  Claude Code switches to that account, and every running session follows from its next request.
+  Switch is drawn in the accent color when that account is a better pick than the live one. Above
+  the prompt the band can also be focused with `ctrl+x tab`, then Enter presses a button.
 - **`/subs`:** lists the accounts. `/subs <account>` switches, `/subs refresh` reads usage now, and
   `/subs hide` / `/subs show` toggle the band, `/subs above` / `/subs below` move it.
 - **`/logout`** is asked twice. A logout revokes the login at Anthropic, which kills the saved copy

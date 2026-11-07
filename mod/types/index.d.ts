@@ -7,6 +7,8 @@ export type SubsWindow = {
   resets: string | null
   /** "today 13:05", "Sat 7 Nov, 11:00". */
   resets_exact: string | null
+  /** "47m", "2h05", "18:30", "tmrw 05:00", "Sat 11:00", "12 Nov"; absent from claude-subs before 0.3. */
+  resets_short?: string | null
 }
 
 export type SubsAccount = {
@@ -50,8 +52,8 @@ declare module 'claude-code' {
       busy: string | null
       hidden: boolean
       placement: 'below' | 'above'
-      /** Which page of the other accounts the band shows, from 0. */
-      page: number
+      /** Where ‹ › left the band: the order it paged through, the page, and when (ms). */
+      browse: { order: string[]; page: number; at: number } | null
     }
   }
 }

@@ -6,6 +6,9 @@
 //! * this week: `Sat 11:00`; further: `12 Nov 11:00`
 //!
 //! The exact form (for hover) is `today 14:30`, `tomorrow 11:00`, `Sat 7 Nov, 11:00`.
+//!
+//! The short form (the Claude Code band) is `42m`, `3h05`, `18:30`, `tmrw 11:00`, `Sat 11:00`,
+//! `12 Nov`.
 
 use chrono::{DateTime, Local, TimeZone};
 
@@ -54,6 +57,20 @@ impl Clock {
             (true, false) => "%-H:%M",
             (false, true) => "%I:%M %p",
             (false, false) => "%-I:%M %p",
+        };
+        t.format(pattern).to_string()
+    }
+
+    /// The clock time with nothing to spare: `18:30`, or `6:30pm` on a 12-hour clock.
+    pub fn time_short<Tz: TimeZone>(&self, t: &DateTime<Tz>) -> String
+    where
+        Tz::Offset: std::fmt::Display,
+    {
+        let pattern = match (self.h24, self.pad) {
+            (true, true) => "%H:%M",
+            (true, false) => "%-H:%M",
+            (false, true) => "%I:%M%P",
+            (false, false) => "%-I:%M%P",
         };
         t.format(pattern).to_string()
     }
@@ -109,6 +126,28 @@ pub fn reset_label(at_ms: i64, now_ms: i64, clock: Clock) -> String {
     }
 }
 
+/// The short form, for the Claude Code band: a countdown under 6 hours, else the day (`tmrw`, a
+/// weekday) and the clock time, and past a week the date alone.
+pub fn reset_short(at_ms: i64, now_ms: i64, clock: Clock) -> String {
+    let mins = (at_ms - now_ms).max(0) / 60_000;
+    if mins < 60 {
+        return format!("{mins}m");
+    }
+    if mins < 6 * 60 {
+        return format!("{}h{:02}", mins / 60, mins % 60);
+    }
+    let (Some(at), Some(now)) = (local(at_ms), local(now_ms)) else {
+        return String::new();
+    };
+    let time = clock.time_short(&at);
+    match (at.date_naive() - now.date_naive()).num_days() {
+        ..=0 => time,
+        1 => format!("tmrw {time}"),
+        2..=6 => format!("{} {time}", at.format("%a")),
+        _ => at.format("%-d %b").to_string(),
+    }
+}
+
 /// The exact form, for hover: always the clock time, with the day.
 pub fn reset_exact(at_ms: i64, now_ms: i64, clock: Clock) -> String {
     match (local(at_ms), local(now_ms)) {
@@ -152,6 +191,18 @@ mod tests {
         assert_eq!(reset_exact(now + 185 * 60_000, now, H24), "today 13:05");
         assert_eq!(reset_exact(ms(2026, 11, 5, 2, 0), now, H24), "tomorrow 02:00");
         assert_eq!(reset_exact(ms(2026, 11, 7, 11, 0), now, H12), "Sat 7 Nov, 11:00 AM");
+    }
+
+    #[test]
+    fn short_labels_by_distance() {
+        let now = ms(2026, 11, 4, 10, 0);
+        assert_eq!(reset_short(now + 42 * 60_000, now, H24), "42m");
+        assert_eq!(reset_short(now + 185 * 60_000, now, H24), "3h05");
+        assert_eq!(reset_short(ms(2026, 11, 4, 18, 30), now, H24), "18:30");
+        assert_eq!(reset_short(ms(2026, 11, 5, 5, 0), now, H24), "tmrw 05:00");
+        assert_eq!(reset_short(ms(2026, 11, 7, 11, 0), now, H24), "Sat 11:00");
+        assert_eq!(reset_short(ms(2026, 11, 12, 9, 5), now, H24), "12 Nov");
+        assert_eq!(reset_short(ms(2026, 11, 5, 23, 0), now, H12), "tmrw 11:00pm");
     }
 
     #[test]

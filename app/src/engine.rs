@@ -124,6 +124,8 @@ pub struct WindowView {
     pub resets: Option<String>,
     /// "today 13:05", "Sat 7 Nov, 11:00": for hover.
     pub resets_exact: Option<String>,
+    /// "3h05", "tmrw 11:00", "Sat 11:00", "12 Nov": for the Claude Code band.
+    pub resets_short: Option<String>,
 }
 
 impl WindowView {
@@ -134,6 +136,7 @@ impl WindowView {
             resets_at: w.resets_at,
             resets: w.resets_at.map(|at| when::reset_label(at, now, clock)),
             resets_exact: w.resets_at.map(|at| when::reset_exact(at, now, clock)),
+            resets_short: w.resets_at.map(|at| when::reset_short(at, now, clock)),
         }
     }
 }

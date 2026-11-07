@@ -1,7 +1,8 @@
 // Claude Subs in Claude Code: a band under the prompt (or above it). On its left the live account's
-// usage; on its right the other saved accounts, a page at a time, each with a Switch button. A press
-// switches the login, and every running session follows (the same way a /login in one session
-// reaches the others).
+// usage; on its right one other saved account, the best one to switch to (the soonest weekly reset
+// with room left), with a Switch button and ‹ › to page through the rest. A press switches the
+// login, and every running session follows (the same way a /login in one session reaches the
+// others).
 //
 // The accounts come from `status.json`, which the claude-subs binary writes (the Windows tray app,
 // or each command this mod runs). Switching runs `claude-subs switch <id>`. Where no tray app
@@ -21,8 +22,8 @@ const busy = atom({ plugin: 'subs-switcher', key: 'busy' } as const, null)
 const hidden = atom({ plugin: 'subs-switcher', key: 'hidden' } as const, false)
 /** Where the band draws: under the prompt (the hint line's row, the default) or above it. */
 const placement = atom({ plugin: 'subs-switcher', key: 'placement' } as const, 'below')
-/** Which page of the other accounts the band shows. */
-const page = atom({ plugin: 'subs-switcher', key: 'page' } as const, 0)
+/** Where ‹ › left the band, until it goes back to the best account. */
+const browse = atom({ plugin: 'subs-switcher', key: 'browse' } as const, null)
 
 /** Where claude-subs and Claude Code keep their files on this machine. */
 type Where = {
@@ -124,13 +125,20 @@ async function tick($: Engine) {
   }
 }
 
-/** Every few seconds: pick up a new status; where no tray app runs, keep the readings going. */
+/**
+ * Every few seconds: bring the band back to the best account once ‹ › has rested; pick up a new
+ * status; where no tray app runs, keep the readings going.
+ */
 async function watch($: Engine) {
+  const now = await $.clock.now()
+  const was = await read($, browse)
+  if (was !== null && now - was.at >= SNAP_MS) {
+    await update($, browse, () => null)
+  }
   if (!where) {
     return
   }
   const st = await load($)
-  const now = await $.clock.now()
   if (st?.driver === 'tray' && now - st.at < 150_000) {
     return
   }
@@ -162,8 +170,8 @@ async function switchTo($: Engine, a: SubsAccount) {
   await load($, true)
   if (r.ok) {
     $.ui.toast(`Switched to ${a.email}`)
-    // The others are now another list.
-    await update($, page, () => 0)
+    // The others are now another list: back to the best of them.
+    await update($, browse, () => null)
     // The new account's first reading.
     void tick($)
   } else {
@@ -171,76 +179,164 @@ async function switchTo($: Engine, a: SubsAccount) {
   }
 }
 
-// The band's widths, in terminal cells. A Button is `[ label ]` on the terminal.
+// ---- Which account the band offers ------------------------------------------------------------
+
+/** A week, in hours: the furthest a reset can be. */
+const WEEK_H = 168
+/** Less room than this (% of the week, or of a running session) is not worth a switch. */
+const MIN_ROOM = 10
+/** How long the band stays where ‹ › left it before it shows the best account again. */
+const SNAP_MS = 30_000
+
+/** An account's 5-hour session: no such limit on its plan, not started yet, or under way. */
+type Session = 'none' | 'idle' | 'running'
+const sessionOf = (a: SubsAccount): Session =>
+  a.session === null ? 'none' : a.session.resets_at === null ? 'idle' : 'running'
+
+type Rated = { account: SubsAccount; score: number; room: number; usable: boolean }
+
+/**
+ * How good a pick an account is now. Weekly room that resets unused is lost, so the account whose
+ * week resets soonest scores highest (0 a week away, 100 resetting now), plus up to 20 for a
+ * running session with room left that resets soon. Under 10% of room it is not usable, unless all
+ * that holds it back is a session that frees up within 15 minutes.
+ */
+function rate(a: SubsAccount, now: number): Rated {
+  const hours = (w: SubsWindow | null) =>
+    w === null || w.resets_at === null ? null : Math.max(0, (w.resets_at - now) / 3_600_000)
+  const session = sessionOf(a)
+  const weekRoom = Math.max(0, 100 - (a.week?.percent ?? 0))
+  const sessionRoom = session === 'running' ? Math.max(0, 100 - (a.session?.percent ?? 0)) : 100
+  const room = Math.min(weekRoom, sessionRoom)
+  const untilWeek = Math.min(WEEK_H, hours(a.week) ?? WEEK_H)
+  const untilSession = hours(a.session)
+  let score = 100 * (1 - untilWeek / WEEK_H)
+  if (session === 'running' && untilSession !== null && untilSession < 5) {
+    score += 20 * (room / 100) * (1 - untilSession / 5)
+  }
+  const freesSoon =
+    session === 'running' && weekRoom >= MIN_ROOM && untilSession !== null && untilSession <= 0.25
+  const usable = a.status === 'ok' && a.usage_at !== null && (room >= MIN_ROOM || freesSoon)
+  return { account: a, score, room, usable }
+}
+
+/** The other accounts, best first: the usable by score, then room, then no session limit; the rest after. */
+function rank(others: SubsAccount[], now: number): Rated[] {
+  const unlimited = (r: Rated) => Number(sessionOf(r.account) === 'none')
+  const loggedOut = (r: Rated) => Number(r.account.status !== 'ok')
+  return others
+    .map(a => rate(a, now))
+    .sort(
+      (x, y) =>
+        Number(y.usable) - Number(x.usable) ||
+        loggedOut(x) - loggedOut(y) ||
+        y.score - x.score ||
+        y.room - x.room ||
+        unlimited(y) - unlimited(x),
+    )
+}
+
+/** The order ‹ › was paging through, kept while the person browses; accounts new since go last. */
+function keep(ids: string[], ranked: Rated[]): Rated[] {
+  const byId = new Map(ranked.map(r => [r.account.id, r]))
+  const kept = ids.flatMap(id => byId.get(id) ?? [])
+  return [...kept, ...ranked.filter(r => !ids.includes(r.account.id))]
+}
+
+// ---- How it reads -----------------------------------------------------------------------------
+
+// Widths in terminal cells. A Button is `[ label ]` on the terminal; a plain one, its label alone.
 const SWITCH = '[ Switch ]'.length
-const ARROW = '[ ‹ ]'.length
-/** Between the accounts on the right. */
+/** Between the account on the right and the pager. */
 const GAP = 2
-/** At least, between the live account and the others. */
+/** At least, between the live account and the other one. */
 const MIDDLE = 3
 /** What the prompt's own padding takes from the screen's width. */
 const MARGIN = 4
+/** ` ‹ 2/5 › `: two padded arrows and the counter. */
+const pagerWidth = (n: number) => 3 + cells(`${n}/${n}`) + 3
 
 /** Cells a text takes: one per character, which holds for the names, numbers and times drawn here. */
 const cells = (s: string) => [...s].length
-const pct = (w: SubsWindow | null) => (w === null ? '–' : `${Math.round(w.percent)}%`)
-const tone = (w: SubsWindow | null) =>
-  w === null ? undefined : w.percent >= 85 ? 'error' : w.percent >= 60 ? 'warning' : undefined
+const tone = (w: SubsWindow) => (w.percent >= 85 ? 'error' : w.percent >= 60 ? 'warning' : undefined)
 
-// The band's texts as strings, to measure them; `band` draws the same.
-const meterText = (label: string, w: SubsWindow | null, resets: boolean) =>
-  `${label} ${pct(w)}${resets && w?.resets ? ` ${w.resets}` : ''}`
-const usageText = (a: SubsAccount, resets: boolean) =>
-  `${a.short}  ${meterText('session', a.session, resets)}  ${meterText('week', a.week, resets)}`
-const liveWidth = (a: SubsAccount | undefined, resets: boolean) =>
-  a ? cells(`● ${usageText(a, resets)}`) : cells('No live account')
-const otherWidth = (a: SubsAccount, resets: boolean) =>
-  a.status === 'needs_login' ? cells(`${a.short}  needs /login`) : cells(usageText(a, resets)) + 1 + SWITCH
-const pagerWidth = (pages: number) => ARROW + 1 + cells(`${pages}/${pages}`) + 1 + ARROW
+/** A piece of a line, measured and drawn alike. */
+type Run = { text: string; color?: 'error' | 'warning' | 'success'; dim?: boolean; bold?: boolean }
+const width = (runs: Run[]) => runs.reduce((n, r) => n + cells(r.text), 0)
 
-/** How the band is laid out: whose reset times show, how many other accounts a page holds. */
-type Fit = { liveResets: boolean; otherResets: boolean; perPage: number; ownRow: boolean }
-
-/** How many of `others` fit side by side in `room`: all of them, or as many as fit beside the pager. */
-function perPage(room: number, others: SubsAccount[], resets: boolean): number {
-  const widest = Math.max(...others.map(a => otherWidth(a, resets)))
-  const fits = (r: number) => Math.floor((r + GAP) / (widest + GAP))
-  if (fits(room) >= others.length) {
-    return others.length
+/** When a window resets, as short as it reads: `47m`, `2h05`, `18:30`, `tmrw 05:00`, `Sat 11:00`. */
+function soon(w: SubsWindow): string | null {
+  if (w.resets_short) {
+    return w.resets_short
   }
-  return Math.max(0, fits(room - GAP - pagerWidth(others.length)))
+  // An older claude-subs words it longer: "in 2h 05m", "in 47m", "today 18:30", "tomorrow 05:00".
+  return (
+    w.resets
+      ?.replace(/^in (\d+)h (\d+)m$/, '$1h$2')
+      .replace(/^in /, '')
+      .replace(/^today /, '')
+      .replace(/^tomorrow /, 'tmrw ') ?? null
+  )
 }
 
-/**
- * The fullest band that fits one row: every reset time, then the others' left out, then the live
- * account's too. Narrower still, the others go on a row of their own, one or more a page.
- */
-function fit(room: number, live: SubsAccount | undefined, others: SubsAccount[]): Fit {
-  if (others.length === 0) {
-    return { liveResets: liveWidth(live, true) <= room, otherResets: false, perPage: 1, ownRow: false }
+/** One window: `65% 1h05`, `full 40m`, `idle` (not started), or `none` where there is no window. */
+function windowRuns(w: SubsWindow | null, times: boolean, none: string): Run[] {
+  if (w === null) {
+    return [{ text: none, dim: true }]
   }
-  for (const [liveResets, otherResets] of [
+  if (w.resets_at === null && w.percent === 0) {
+    return [{ text: 'idle', dim: true }]
+  }
+  const level: Run =
+    w.percent >= 100 ? { text: 'full', color: 'error' } : { text: `${Math.round(w.percent)}%`, color: tone(w) }
+  const at = times ? soon(w) : null
+  return at ? [level, { text: ` ${at}`, dim: true }] : [level]
+}
+
+/** `side 65% 1h05 │ 85% tmrw 05:00`: the 5-hour session (∞ where the plan has none), then the week. */
+function usageRuns(a: SubsAccount, times: boolean): Run[] {
+  if (a.status === 'needs_login') {
+    return [{ text: `${a.short} needs /login`, dim: true }]
+  }
+  return [
+    { text: a.short, bold: true },
+    { text: ' ' },
+    ...windowRuns(a.session, times, a.usage_at === null ? '–' : '∞'),
+    { text: ' │ ', dim: true },
+    ...windowRuns(a.week, times, '–'),
+  ]
+}
+
+const LIVE: Run = { text: '● ', color: 'success' }
+
+/**
+ * The fullest band that fits one row: every reset time, then the other account's left out, then
+ * the live one's too; narrower still, the other account goes on a row of its own. Measured on the
+ * widest of the others, so paging never changes the form.
+ */
+function fit(room: number, live: SubsAccount | undefined, others: SubsAccount[]) {
+  const left = (times: boolean) => (live ? width([LIVE, ...usageRuns(live, times)]) : cells('No live account'))
+  const pager = others.length > 1 ? GAP + pagerWidth(others.length) : 0
+  const right = (times: boolean) =>
+    others.length === 0
+      ? 0
+      : Math.max(...others.map(a => width(usageRuns(a, times)) + (a.status === 'ok' ? 1 + SWITCH : 0))) + pager
+  for (const [liveTimes, otherTimes] of [
     [true, true],
     [true, false],
     [false, false],
   ] as const) {
-    const n = perPage(room - liveWidth(live, liveResets) - MIDDLE, others, otherResets)
-    if (n > 0) {
-      return { liveResets, otherResets, perPage: n, ownRow: false }
+    if (left(liveTimes) + MIDDLE + right(otherTimes) <= room) {
+      return { liveTimes, otherTimes, ownRow: false }
     }
   }
-  const otherResets = perPage(room, others, true) > 0
-  return {
-    liveResets: liveWidth(live, true) <= room,
-    otherResets,
-    perPage: Math.max(1, perPage(room, others, otherResets)),
-    ownRow: true,
-  }
+  return { liveTimes: left(true) <= room, otherTimes: right(true) <= room, ownRow: true }
 }
 
 /**
- * The band: on the left the live account's usage; on the right the other saved accounts, a page
- * at a time, each with its usage and a Switch button. Null with no accounts.
+ * The band: on the left the live account; on the right one other account, the best to switch to
+ * unless ‹ › moved it in the last 30 seconds, with its Switch button (the accent color when it is
+ * a better pick than the live one) and the pager. Null with no accounts.
  */
 async function band($: Engine, ui: ElementTable, columns: number) {
   const st = await read($, status)
@@ -249,66 +345,66 @@ async function band($: Engine, ui: ElementTable, columns: number) {
   }
   const switching = await read($, busy)
   const { Box, Button, Text } = ui
+  const now = await $.clock.now()
   const live = st.accounts.find(a => a.active)
   const others = st.accounts.filter(a => !a.active)
   const f = fit(columns - MARGIN, live, others)
-  const pages = Math.max(1, Math.ceil(others.length / f.perPage))
-  const at = Math.min(await read($, page), pages - 1)
-  const shown = others.slice(at * f.perPage, (at + 1) * f.perPage)
-  const turn = (to: number) => () => update($, page, () => (to + pages) % pages)
 
-  const meter = (label: string, w: SubsWindow | null, resets: boolean) => (
+  const ranked = rank(others, now)
+  const was = await read($, browse)
+  const browsing = was !== null && now - was.at < SNAP_MS
+  const order = browsing ? keep(was.order, ranked) : ranked
+  const at = browsing ? Math.min(was.page, order.length - 1) : 0
+  const pick = order[at]
+  const liveRated = live ? rate(live, now) : null
+  const better = pick?.usable === true && (liveRated === null || !liveRated.usable || pick.score > liveRated.score)
+  const turn = (step: number) => async () => {
+    const pressed = await $.clock.now()
+    await update($, browse, () => ({
+      order: order.map(r => r.account.id),
+      page: (at + step + order.length) % order.length,
+      at: pressed,
+    }))
+  }
+
+  const draw = (runs: Run[]) => (
     <Text>
-      {label} <Text color={tone(w)}>{pct(w)}</Text>
-      {resets && w?.resets ? <Text dimColor> {w.resets}</Text> : null}
-    </Text>
-  )
-  const usage = (a: SubsAccount, resets: boolean) => (
-    <Text>
-      {'  '}
-      {meter('session', a.session, resets)}
-      {'  '}
-      {meter('week', a.week, resets)}
+      {runs.map(r => (
+        <Text color={r.color} dimColor={r.dim} weight={r.bold ? 'bold' : undefined}>
+          {r.text}
+        </Text>
+      ))}
     </Text>
   )
 
-  const left = live ? (
-    <Text>
-      <Text color="success">●</Text> <Text weight="bold">{live.short}</Text>
-      {usage(live, f.liveResets)}
-    </Text>
-  ) : (
-    <Text dimColor>No live account</Text>
-  )
+  const left = live ? draw([LIVE, ...usageRuns(live, f.liveTimes)]) : <Text dimColor>No live account</Text>
 
   const right =
     switching !== null ? (
       <Text dimColor>switching to {switching}…</Text>
-    ) : others.length === 0 ? null : (
+    ) : pick === undefined ? null : (
       <Box flexDirection="row" columnGap={GAP}>
-        {shown.map(a =>
-          a.status === 'needs_login' ? (
-            <Text dimColor>{a.short}  needs /login</Text>
-          ) : (
-            <Box flexDirection="row" columnGap={1}>
-              <Text>
-                {a.short}
-                {usage(a, f.otherResets)}
-              </Text>
-              <Button key={`switch-${a.id}`} label={`Switch to ${a.short}`} onPress={() => switchTo($, a)}>
-                Switch
-              </Button>
-            </Box>
-          ),
-        )}
-        {pages > 1 && (
-          <Box flexDirection="row" columnGap={1}>
-            <Button key="page-prev" label="Previous accounts" onPress={turn(at - 1)}>
-              ‹
+        <Box flexDirection="row" columnGap={1}>
+          {draw(usageRuns(pick.account, f.otherTimes))}
+          {pick.account.status === 'ok' && (
+            <Button
+              key={`switch-${pick.account.id}`}
+              label={`Switch to ${pick.account.short}`}
+              variant={better ? 'primary' : undefined}
+              onPress={() => switchTo($, pick.account)}
+            >
+              Switch
             </Button>
-            <Text dimColor>{`${at + 1}/${pages}`.padStart(cells(`${pages}/${pages}`))}</Text>
-            <Button key="page-next" label="Next accounts" onPress={turn(at + 1)}>
-              ›
+          )}
+        </Box>
+        {order.length > 1 && (
+          <Box flexDirection="row">
+            <Button key="page-prev" label="Previous account" plain dimColor onPress={turn(-1)}>
+              {' ‹ '}
+            </Button>
+            <Text dimColor>{`${at + 1}/${order.length}`.padStart(cells(`${order.length}/${order.length}`))}</Text>
+            <Button key="page-next" label="Next account" plain dimColor onPress={turn(1)}>
+              {' › '}
             </Button>
           </Box>
         )}

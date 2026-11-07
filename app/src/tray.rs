@@ -246,6 +246,7 @@ mod tests {
             resets_at: resets.map(|_| 0),
             resets: resets.map(str::to_owned),
             resets_exact: None,
+            resets_short: None,
         }
     }
 

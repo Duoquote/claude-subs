@@ -4,9 +4,9 @@ Switches Claude Code's login between your Claude accounts, and shows how much of
 session (5-hour) and weekly limit is used.
 
 - **In Claude Code** (Windows and Linux): a band under the prompt. On its left, the live account's
-  usage. On its right, your other saved accounts, a page at a time, each with its usage, reset
-  times and a Switch button. Click Switch and every running Claude Code session carries on with
-  that account.
+  usage. On its right, the best other account to switch to, with its usage, reset times and a
+  Switch button; `‹ ›` pages through the rest. Click Switch and every running Claude Code session
+  carries on with that account.
 - **On Windows:** a tray app with the usage in the icon and a popover listing all accounts.
 - **Anywhere:** a command line, `claude-subs status` / `switch <account>`.
 
@@ -41,9 +41,9 @@ target\release\claude-subs.exe setup --mod-dir "$PWD\mod"
 - **Add an account:** run `/login` in any Claude Code session. The new login is saved on its own;
   there is no separate add step.
 - **Switch:**
-  - click **Switch** beside an account in the band (fullscreen mode, `"tui": "fullscreen"`);
-    `[ ‹ ]` and `[ › ]` page through the accounts. With the band above the prompt (`/subs above`)
-    you can also focus it with `ctrl+x tab` and press Enter;
+  - click **Switch** in the band (fullscreen mode, `"tui": "fullscreen"`); `‹` and `›` page
+    through the accounts, best first. With the band above the prompt (`/subs above`) you can also
+    focus it with `ctrl+x tab` and press Enter;
   - type `/subs <account>`;
   - run `claude-subs switch <account>`;
   - on Windows, use the tray popover or menu.
@@ -60,12 +60,39 @@ target\release\claude-subs.exe setup --mod-dir "$PWD\mod"
 
 | | |
 |---|---|
-| Band | Under the prompt, below the hint line. Left: the live account's session and week, with reset times. Right: the other accounts, as many as fit, each as `side  session 12% in 2h 05m  week 30% Sat 11:00 [ Switch ]`, then `[ ‹ ] 1/3 [ › ]` to page. Narrow terminals drop the others' reset times first, then the live one's, then put the others on a second row. |
+| Band | Under the prompt, below the hint line: `● work ∞ │ 79% tmrw 05:00` on the left, `side idle │ 71% tmrw 14:00 [ Switch ]  ‹ 1/5 ›` on the right (see below). |
 | `/subs` | Lists the accounts. |
 | `/subs <account>` | Switches. |
 | `/subs refresh` | Reads every account's usage now. |
 | `/subs hide`, `/subs show` | Toggles the band. |
 | `/subs above`, `/subs below` | Moves the band over the prompt or back under it. |
+
+Each account reads `name session │ week`, each window as its use and when it resets:
+
+| | |
+|---|---|
+| `65% 1h05` | 65% used, resets in 1 h 05 min (a countdown under 6 hours) |
+| `85% tmrw 05:00` | resets tomorrow at 05:00; then `Sat 11:00`, and past a week `14 Nov` |
+| `idle` | the window has not started; it starts with the account's first message |
+| `∞` | the plan has no 5-hour limit |
+| `full 40m` | at the limit, free again in 40 minutes |
+
+Narrow terminals drop the right account's reset times first, then the live one's, and then put the
+right account on a second row.
+
+**Which account the band offers.** Weekly room that resets unused is lost, so the band offers the
+account whose week resets soonest and still has room:
+
+- An account is offered when it has at least 10% of room left: of its week, and of its 5-hour
+  session while one is running. A session that frees up within 15 minutes does not hold it back.
+- Its score is `100 × (1 − hours until its week resets ÷ 168)`, plus up to 20 for a running
+  session with room left that resets soon: `20 × room × (1 − hours until it resets ÷ 5)`.
+- Ties go to more room, then to an account with no 5-hour limit.
+
+`‹ ›` pages through the accounts in that order (`1/5` is the best). The band goes back to the best
+30 seconds after the last `‹ ›`, and holds the order still while you page. Switch is drawn in the
+accent color when the offered account scores higher than the live one, or the live one is out of
+room.
 
 The mod is an early-access Claude Code feature (function hooks), and its API may change between
 Claude Code releases. If a release breaks it, the command line keeps working.
